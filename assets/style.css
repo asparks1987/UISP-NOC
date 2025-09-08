@@ -1,0 +1,103 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #eee;
+  margin: 0;
+  padding: 0;
+}
+header {
+  background: #222;
+  padding: 12px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #0f0;
+  border-bottom: 2px solid #0f0;
+}
+.tabs {
+  display: flex;
+  background: #1a1a1a;
+}
+.tablink {
+  flex: 1;
+  padding: 10px;
+  cursor: pointer;
+  background: #333;
+  border: none;
+  color: #eee;
+  font-size: 16px;
+}
+.tablink.active {
+  background: #0a0a0a;
+  border-bottom: 3px solid #0f0;
+}
+.tabcontent {
+  padding: 15px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+.card {
+  background: #222;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+  transition: transform 0.2s;
+}
+.card:hover {
+  transform: scale(1.02);
+}
+.card.offline {
+  border: 1px solid #f55;
+  box-shadow: 0 0 12px rgba(255, 0, 0, 0.4);
+}
+.status {
+  margin-top: 5px;
+  font-size: 14px;
+}
+.actions button {
+  margin: 3px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.actions button:hover {
+  opacity: 0.8;
+}
+.badge {
+  display: inline-block;
+  margin: 2px 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.badge.good { background: #133; color: #0f0; }
+.badge.warn { background: #331; color: #ff0; }
+.badge.bad  { background: #311; color: #f55; }
+footer {
+  background: #222;
+  padding: 8px;
+  font-size: 12px;
+  text-align: center;
+  color: #999;
+  border-top: 1px solid #333;
+}
+.modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+}
+.modal-content {
+  background: #222;
+  margin: 5% auto;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+}

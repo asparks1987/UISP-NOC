@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  uisp-noc:
+    build: .
+    container_name: uisp-noc
+    environment:
+      - UISP_URL=https://changeme.unmsapp.com
+      - UISP_TOKEN=YOUR_API_TOKEN_HERE
+    ports:
+      - "12443:80"
+    volumes:
+      - noc_cache:/var/www/html/cache
+    restart: unless-stopped
+
+volumes:
+  noc_cache:
