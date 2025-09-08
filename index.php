@@ -76,6 +76,7 @@ if(isset($_GET['ajax'])){
 
         $now=time();
         $out=[];
+        $cache_changed=false;
         foreach($devices as $d){
             $id=device_key($d);
             $name=$d['identification']['name']??$id;
@@ -84,6 +85,11 @@ if(isset($_GET['ajax'])){
             $cpu=$d['overview']['cpu']??null;
             $ram=$d['overview']['ram']??null;
             $temp=$d['overview']['temperature']??null;
+            // Uptime in seconds if available (UISP may expose different keys)
+            $uptime=$d['overview']['uptime']
+                ?? $d['overview']['uptimeSeconds']
+                ?? $d['overview']['uptime_sec']
+                ?? null;
             $lat=null;
 
             if($isGw){
@@ -104,15 +110,28 @@ if(isset($_GET['ajax'])){
             $sim=!empty($cache[$id]['simulate']);
             if($sim) $on=false;
 
+            // Track offline start time to compute outage duration
+            if(!isset($cache[$id])) $cache[$id]=[];
+            if(!$on){
+                if(empty($cache[$id]['offline_since'])){ $cache[$id]['offline_since']=$now; $cache_changed=true; }
+                $offline_since=$cache[$id]['offline_since'];
+            } else {
+                if(!empty($cache[$id]['offline_since'])){ unset($cache[$id]['offline_since']); $cache_changed=true; }
+                $offline_since=null;
+            }
+
             $ack_until=$cache[$id]['ack_until']??null;
 
             $out[]=[
                 'id'=>$id,'name'=>$name,'gateway'=>$isGw,
                 'online'=>$on,'cpu'=>$cpu,'ram'=>$ram,'temp'=>$temp,'latency'=>$lat,
+                'uptime'=>$uptime,
+                'offline_since'=>$offline_since,
                 'simulate'=>$sim,'ack_until'=>$ack_until
             ];
         }
 
+        if($cache_changed){ file_put_contents($CACHE_FILE,json_encode($cache)); }
         echo json_encode(['devices'=>$out,'http'=>$http_code,'api_latency'=>$api_latency]); exit;
     }
 

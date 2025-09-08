@@ -7,7 +7,50 @@ function openTab(id){
 function badgeVal(v,label,suf){if(v==null)return'';let cls='good';if(v>90)cls='bad';else if(v>75)cls='warn';return `<span class="badge ${cls}">${label}: ${v}${suf}</span>`;}
 function badgeLatency(v){if(v==null)return'';let cls='good';if(v>500)cls='bad';else if(v>100)cls='warn';return `<span class="badge ${cls}">Latency: ${v} ms</span>`;}
 
-let sirenTimeout=null;
+// Human-readable uptime badge from seconds
+function fmtDuration(sec){
+  if(typeof sec!=="number" || !isFinite(sec) || sec<0) return null;
+  let s=Math.floor(sec);
+  const d=Math.floor(s/86400); s%=86400;
+  const h=Math.floor(s/3600); s%=3600;
+  const m=Math.floor(s/60);
+  const parts=[];
+  if(d) parts.push(d+"d"); if(h) parts.push(h+"h"); if(m||parts.length===0) parts.push(m+"m");
+  return parts.join(" ");
+}
+function badgeUptime(v){ const t=fmtDuration(v); return t?`<span class="badge good">Uptime: ${t}</span>`:''; }
+
+// Ack badge with remaining time (h m s)
+function fmtRemain(sec){
+  if(typeof sec!=="number" || !isFinite(sec) || sec<=0) return null;
+  let s=Math.floor(sec);
+  const d=Math.floor(s/86400); s%=86400;
+  const h=Math.floor(s/3600); s%=3600;
+  const m=Math.floor(s/60);   s%=60;
+  const parts=[];
+  if(d) parts.push(d+"d"); if(h) parts.push(h+"h"); if(m) parts.push(m+"m"); parts.push(s+"s");
+  return parts.join(" ");
+}
+function badgeAck(until){
+  const nowSec=Math.floor(Date.now()/1000);
+  if(!(until && until>nowSec)) return '';
+  const rem=until-nowSec;
+  const t=fmtRemain(rem);
+  return t?`<span class="badge warn">ACK: ${t}</span>`:'';
+}
+// Outage badge showing how long offline
+function badgeOutage(since, online){
+  if(!since || online) return '';
+  const nowSec=Math.floor(Date.now()/1000);
+  const dur=nowSec - since;
+  const t=fmtRemain(dur);
+  return t?`<span class="badge bad">Outage: ${t}</span>`:'';
+}
+
+// Siren scheduling state
+let sirenTimeout=null;          // Next scheduled siren timer
+let sirenNextDelayMs=30000;     // 30s for first alert, 10m for repeats
+let sirenShouldAlertPrev=false; // Track transitions to reset delay
 let devicesCache=[];
 let audioUnlocked=false;
 
@@ -45,12 +88,13 @@ function fetchDevices(){
     const badges=[badgeVal(d.cpu,'CPU','%'),badgeVal(d.ram,'RAM','%'),badgeVal(d.temp,'Temp','°C'),badgeLatency(d.latency)].join(' ');
     const ackActive = d.ack_until && d.ack_until > (Date.now()/1000);
     return `<div class="card ${d.online?'':'offline'}">
+      <div class="ack-badge">${badgeAck(d.ack_until)}</div>
       <h2>${d.name}</h2>
       <div class="status" style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
-      <div>${badges}</div>
+      <div>${badges} ${badgeUptime(d.uptime)} ${badgeOutage(d.offline_since, d.online)}</div>
       <div class="actions">
         ${!d.online ? `
-          <div class="dropdown">
+          <div class="dropdown" style="${ackActive ? 'display:none' : ''}">
             <button onclick="toggleAckMenu('${d.id}')">Ack ▾</button>
             <div id="ack-${d.id}" class="dropdown-content" style="display:none;background:#333;position:absolute;">
               <a href="#" onclick="ack('${d.id}','30m')">30m</a>
@@ -62,9 +106,7 @@ function fetchDevices(){
           </div>
           ${ackActive ? `<button onclick="clearAck('${d.id}')">Clear Ack</button>`:''}
         `:``}
-        ${d.simulate
-          ? `<button onclick="clearSim('${d.id}')">Clear Sim</button>`
-          : `<button onclick="simulate('${d.id}')">Simulate Outage</button>`}
+        
         <button onclick="showHistory('${d.id}','${d.name}')">History</button>
       </div>
     </div>`;
@@ -107,21 +149,43 @@ function fetchDevices(){
   const overallEl=document.getElementById('overallSummary');
   if(overallEl) overallEl.innerHTML=summaryHTML;
 
-  // Siren logic (also trigger for simulated outages so you can test it)
-  if(gws.some(d=>!d.online)){
+  // Siren logic: only for UNACKED offline gateways
+  const shouldAlert = gws.some(d=>!d.online && !(d.ack_until && d.ack_until>nowSec));
+
+  if(shouldAlert){
+    // Reset to initial 30s delay when entering alert state
+    if(!sirenShouldAlertPrev){
+      clearTimeout(sirenTimeout); sirenTimeout=null;
+      sirenNextDelayMs=30000; // initial grace period
+    }
     if(!sirenTimeout){
       sirenTimeout=setTimeout(()=>{
-        const a=document.getElementById('siren');
-        if(!a) return;
-        try{ a.pause(); a.currentTime=0; a.muted=false; a.volume=1; }catch(_){ }
-        const pr=a.play();
-        if(pr && pr.catch){ pr.catch(()=>{ const b=document.getElementById('enableSoundBtn'); if(b) b.style.display=''; }); }
-      },30000);
+        // Re-evaluate at fire time using freshest cache
+        const stillAlert = devicesCache
+          .filter(d=>d.gateway)
+          .some(d=>!d.online && !(d.ack_until && d.ack_until>(Date.now()/1000)));
+        if(stillAlert){
+          const a=document.getElementById('siren');
+          if(a){
+            try{ a.pause(); a.currentTime=0; a.muted=false; a.volume=1; }catch(_){ }
+            const pr=a.play();
+            if(pr && pr.catch){ pr.catch(()=>{ const b=document.getElementById('enableSoundBtn'); if(b) b.style.display=''; }); }
+          }
+          // After first fire, repeat every 10 minutes while unacked
+          sirenNextDelayMs=10*60*1000;
+        }
+        // Clear timer and allow next scheduling on next poll
+        clearTimeout(sirenTimeout); sirenTimeout=null;
+      }, sirenNextDelayMs);
     }
   } else {
+    // No unacked offline => cancel and silence
     clearTimeout(sirenTimeout); sirenTimeout=null;
-    document.getElementById('siren').pause(); document.getElementById('siren').currentTime=0;
+    sirenNextDelayMs=30000;
+    const a=document.getElementById('siren');
+    if(a){ a.pause(); a.currentTime=0; }
   }
+  sirenShouldAlertPrev = shouldAlert;
  });
 }
 function toggleAckMenu(id){const el=document.getElementById('ack-'+id);el.style.display=el.style.display==='none'?'block':'none';}

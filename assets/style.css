@@ -35,8 +35,9 @@ header {
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 15px;
+  /* Exactly 5 columns that auto-fit the available width (no horizontal scroll) */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
   margin-top: 15px;
 }
 .card {
@@ -45,6 +46,7 @@ header {
   padding: 12px;
   box-shadow: 0 0 10px rgba(176, 108, 255, 0.35);
   transition: transform 0.2s;
+  position: relative; /* allow absolute-positioned badges */
 }
 .card:hover {
   transform: scale(1.02);
@@ -135,3 +137,49 @@ footer {
 
 /* Charts sizing inside modal */
 #historyModal canvas { display:block; width:100% !important; height: 220px !important; margin: 8px 0; }
+
+/* Dropdown (Ack menu) */
+.dropdown { position: relative; display: inline-block; }
+.dropdown-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  min-width: 220px;
+  padding: 6px 0;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 0 12px rgba(176,108,255,0.35);
+}
+.dropdown-content a {
+  display: block;
+  padding: 10px 14px;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #eee;
+  text-decoration: none;
+}
+.dropdown-content a:hover { background: #333; }
+.dropdown-content a:active { background: #444; }
+
+/* Ack timer at top-right of card */
+.ack-badge { position: absolute; top: 8px; right: 8px; }
+.ack-badge .badge { font-size: 12px; padding: 3px 8px; }
+
+/* Responsive spacing and typography tweaks */
+@media (max-width: 480px) {
+  .tabcontent { padding: 12px; }
+  .grid { gap: 12px; }
+  .card { padding: 10px; }
+}
+@media (min-width: 1200px) {
+  .tabcontent { padding: 20px; }
+  .grid { gap: 20px; }
+  .card { padding: 16px; }
+}
+@media (min-width: 1600px) {
+  .tabcontent { padding: 24px; }
+  .grid { gap: 24px; }
+  .card { padding: 18px; }
+}
