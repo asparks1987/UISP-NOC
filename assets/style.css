@@ -10,8 +10,8 @@ header {
   padding: 12px;
   font-size: 22px;
   font-weight: bold;
-  color: #0f0;
-  border-bottom: 2px solid #0f0;
+  color: #e6e6e6;
+  border-bottom: 2px solid #b06cff;
 }
 .tabs {
   display: flex;
@@ -28,7 +28,7 @@ header {
 }
 .tablink.active {
   background: #0a0a0a;
-  border-bottom: 3px solid #0f0;
+  border-bottom: 3px solid #b06cff;
 }
 .tabcontent {
   padding: 15px;
@@ -43,7 +43,7 @@ header {
   background: #222;
   border-radius: 8px;
   padding: 12px;
-  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+  box-shadow: 0 0 10px rgba(176, 108, 255, 0.35);
   transition: transform 0.2s;
 }
 .card:hover {
@@ -86,6 +86,18 @@ footer {
   color: #999;
   border-top: 1px solid #333;
 }
+
+/* Accent button for enabling sound */
+.btn-accent {
+  background: linear-gradient(90deg, #7a2cff, #b06cff);
+  color: #fff;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  box-shadow: 0 0 14px rgba(176,108,255,0.55);
+  cursor: pointer;
+}
+.btn-accent:hover { box-shadow: 0 0 18px rgba(176,108,255,0.75); }
 .modal {
   display: none;
   position: fixed;

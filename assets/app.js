@@ -9,6 +9,30 @@ function badgeLatency(v){if(v==null)return'';let cls='good';if(v>500)cls='bad';e
 
 let sirenTimeout=null;
 let devicesCache=[];
+let audioUnlocked=false;
+
+function unlockAudio(){
+  if(audioUnlocked) return;
+  const a=document.getElementById('siren');
+  if(!a) return;
+  const prevMuted=a.muted;
+  const prevVol=a.volume;
+  a.muted=false;
+  a.volume=0.05; // brief quiet blip
+  const p=a.play();
+  const onSuccess=()=>{
+    setTimeout(()=>{ try{ a.pause(); a.currentTime=0; a.volume=prevVol; a.muted=prevMuted; }catch(_){}; audioUnlocked=true; const b=document.getElementById('enableSoundBtn'); if(b) b.style.display='none'; }, 120);
+  };
+  if(p && p.then){
+    p.then(onSuccess).catch(()=>{ /* still blocked */ });
+  } else {
+    try{ onSuccess(); }catch(_){ }
+  }
+}
+
+function enableSound(){
+  unlockAudio();
+}
 
 function fetchDevices(){
  fetch('?ajax=devices').then(r=>r.json()).then(j=>{
@@ -22,7 +46,7 @@ function fetchDevices(){
     const ackActive = d.ack_until && d.ack_until > (Date.now()/1000);
     return `<div class="card ${d.online?'':'offline'}">
       <h2>${d.name}</h2>
-      <div class="status" style="color:${d.online?'#0f0':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
+      <div class="status" style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
       <div>${badges}</div>
       <div class="actions">
         ${!d.online ? `
@@ -48,15 +72,21 @@ function fetchDevices(){
   document.getElementById('gateGrid').innerHTML=gwHTML;
 
   // CPEs
-  const cpeHTML=cps.map(d=>`<div class="card ${d.online?'':'offline'}"><h2>${d.name}</h2><div style="color:${d.online?'#0f0':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div></div>`).join('');
+  const cpeHTML=cps.map(d=>`<div class="card ${d.online?'':'offline'}"><h2>${d.name}</h2><div style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div></div>`).join('');
   document.getElementById('cpeGrid').innerHTML=cpeHTML;
 
   document.getElementById('footer').innerText=`HTTP ${j.http}, API latency ${j.api_latency} ms, Updated ${new Date().toLocaleTimeString()}`;
 
-  // Siren logic
-  if(gws.some(d=>!d.online && !d.simulate)){
+  // Siren logic (also trigger for simulated outages so you can test it)
+  if(gws.some(d=>!d.online)){
     if(!sirenTimeout){
-      sirenTimeout=setTimeout(()=>{document.getElementById('siren').play();},30000);
+      sirenTimeout=setTimeout(()=>{
+        const a=document.getElementById('siren');
+        if(!a) return;
+        try{ a.pause(); a.currentTime=0; a.muted=false; a.volume=1; }catch(_){ }
+        const pr=a.play();
+        if(pr && pr.catch){ pr.catch(()=>{ const b=document.getElementById('enableSoundBtn'); if(b) b.style.display=''; }); }
+      },30000);
     }
   } else {
     clearTimeout(sirenTimeout); sirenTimeout=null;
@@ -77,6 +107,8 @@ function clearAck(id){
   fetch(`?ajax=clear&id=${id}`).then(fetchDevices);
 }
 function simulate(id){
+  // Try to unlock audio on explicit user action
+  unlockAudio();
   let dev=devicesCache.find(x=>x.id===id);
   if(dev){dev.simulate=true;}
   fetch(`?ajax=simulate&id=${id}`).then(fetchDevices);
@@ -106,3 +138,7 @@ function showHistory(id,name){
 }
 setInterval(fetchDevices,10000);
 fetchDevices();
+
+// Best-effort unlock on first user click anywhere
+window.addEventListener('click',unlockAudio,{once:true});
+

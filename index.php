@@ -171,6 +171,7 @@ if(!isset($_GET['ajax'])){
 <body>
 <header>
   UISP NOC 
+  <button id="enableSoundBtn" class="btn-accent" onclick="enableSound()" style="float:right;margin-right:10px;">Enable Sound</button>
   <button onclick="clearAll()" style="float:right;margin-right:10px;">Clear All Acks</button>
 </header>
 <div class="tabs">
