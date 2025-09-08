@@ -171,6 +171,7 @@ if(!isset($_GET['ajax'])){
 <body>
 <header>
   UISP NOC 
+  <span id="overallSummary"></span>
   <button id="enableSoundBtn" class="btn-accent" onclick="enableSound()" style="float:right;margin-right:10px;">Enable Sound</button>
   <button onclick="clearAll()" style="float:right;margin-right:10px;">Clear All Acks</button>
 </header>
@@ -185,6 +186,7 @@ if(!isset($_GET['ajax'])){
 <div id="historyModal" class="modal">
   <div class="modal-content">
     <h3 id="histTitle"></h3>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">&times;</button>
     <canvas id="cpuChart"></canvas>
     <canvas id="ramChart"></canvas>
     <canvas id="tempChart"></canvas>

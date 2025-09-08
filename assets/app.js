@@ -77,6 +77,36 @@ function fetchDevices(){
 
   document.getElementById('footer').innerText=`HTTP ${j.http}, API latency ${j.api_latency} ms, Updated ${new Date().toLocaleTimeString()}`;
 
+  // Overall header summary
+  const nowSec=Math.floor(Date.now()/1000);
+  const total=j.devices.length;
+  const online=j.devices.filter(d=>d.online).length;
+  const health = total>0 ? Math.round((online/total)*100) : null;
+  const offlineGw=gws.filter(d=>!d.online).length;
+  const unacked=gws.filter(d=>!d.online && !(d.ack_until && d.ack_until>nowSec)).length;
+  const latVals=gws.map(d=>d.latency).filter(v=>typeof v==='number' && isFinite(v));
+  const avgLat = latVals.length ? Math.round(latVals.reduce((a,b)=>a+b,0)/latVals.length) : null;
+  const highCpu=gws.filter(d=>typeof d.cpu==='number' && d.cpu>90).length;
+  const highRam=gws.filter(d=>typeof d.ram==='number' && d.ram>90).length;
+
+  const healthClass = health==null ? 'good' : (health>=95?'good':(health>=80?'warn':'bad'));
+  const latClass = avgLat==null ? 'good' : (avgLat>500?'bad':(avgLat>100?'warn':'good'));
+  const offlineClass = offlineGw>0 ? 'bad' : 'good';
+  const unackedClass = unacked>0 ? 'bad' : 'good';
+  const cpuClass = highCpu>0 ? 'bad' : 'good';
+  const ramClass = highRam>0 ? 'bad' : 'good';
+
+  const summaryHTML = [
+    `<span class="badge ${healthClass}">Health: ${health==null?'--':health+'%'}</span>`,
+    `<span class="badge ${offlineClass}">GW Offline: ${offlineGw}</span>`,
+    `<span class="badge ${unackedClass}">Unacked: ${unacked}</span>`,
+    `<span class="badge ${latClass}">Avg Latency: ${avgLat==null?'--':avgLat+' ms'}</span>`,
+    `<span class="badge ${cpuClass}">High CPU: ${highCpu}</span>`,
+    `<span class="badge ${ramClass}">High RAM: ${highRam}</span>`
+  ].join(' ');
+  const overallEl=document.getElementById('overallSummary');
+  if(overallEl) overallEl.innerHTML=summaryHTML;
+
   // Siren logic (also trigger for simulated outages so you can test it)
   if(gws.some(d=>!d.online)){
     if(!sirenTimeout){
@@ -133,7 +163,8 @@ function showHistory(id,name){
    new Chart(document.getElementById('ramChart'),{type:'line',data:{labels,datasets:[{label:'RAM %',data:ram,borderColor:'yellow'}]}});
    new Chart(document.getElementById('tempChart'),{type:'line',data:{labels,datasets:[{label:'Temp °C',data:temp,borderColor:'red'}]}});
    new Chart(document.getElementById('latChart'),{type:'line',data:{labels,datasets:[{label:'Latency ms',data:lat,borderColor:'cyan'}]}});
-   document.getElementById('historyModal').style.display='block';
+   const modal=document.getElementById('historyModal');
+   modal.style.display='block';
  });
 }
 setInterval(fetchDevices,10000);
@@ -141,4 +172,13 @@ fetchDevices();
 
 // Best-effort unlock on first user click anywhere
 window.addEventListener('click',unlockAudio,{once:true});
+
+// Close history modal when clicking the overlay or pressing Escape
+(function(){
+  const modal=document.getElementById('historyModal');
+  if(modal){
+    modal.addEventListener('click',(e)=>{ if(e.target===modal) closeModal(); });
+  }
+  window.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeModal(); });
+})();
 
