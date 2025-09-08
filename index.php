@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 date_default_timezone_set('America/Chicago');
 
 // Config
-$UISP_URL   = getenv("UISP_URL") ?: "https://cjcable.unmsapp.com";
+$UISP_URL   = getenv("UISP_URL") ?: "https://changeme.unmsapp.com";
 $UISP_TOKEN = getenv("UISP_TOKEN") ?: "changeme";
 
 $CACHE_DIR  = __DIR__ . "/cache";
@@ -37,6 +37,15 @@ $db->exec("CREATE TABLE IF NOT EXISTS metrics (
     online INTEGER
 )");
 
+// Asset/version cache-busting
+// Calculate a version based on the latest mtime of key files
+$ASSET_VERSION = max(
+    @filemtime(__FILE__) ?: 0,
+    @filemtime(__DIR__ . '/assets/style.css') ?: 0,
+    @filemtime(__DIR__ . '/assets/app.js') ?: 0,
+    @filemtime(__DIR__ . '/buz.mp3') ?: 0
+);
+
 // Helpers
 function device_key($dev){ $id=$dev['identification']??[]; return $id['mac'] ?? $id['id'] ?? $id['name'] ?? 'unknown'; }
 function is_gateway($d){ return strtolower($d['identification']['role']??'')==="gateway"; }
@@ -46,6 +55,9 @@ function ping_host($ip){ if(!$ip) return null; $ip=preg_replace('/\/\d+$/','',$i
 // AJAX
 if(isset($_GET['ajax'])){
     header("Content-Type: application/json");
+    // Prevent caching of AJAX responses
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
 
     if($_GET['ajax']==='devices'){
         $ch=curl_init();
@@ -142,13 +154,19 @@ if(isset($_GET['ajax'])){
         echo json_encode(['ok'=>1]); exit;
     }
 }
+
+// For main HTML: prevent caching so index.php updates are reflected immediately
+if(!isset($_GET['ajax'])){
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+}
 ?>
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>UISP NOC</title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?v=<?=$ASSET_VERSION?>">
 </head>
 <body>
 <header>
@@ -174,9 +192,9 @@ if(isset($_GET['ajax'])){
   </div>
 </div>
 
-<audio id="siren" src="buz.mp3" preload="auto"></audio>
+<audio id="siren" src="buz.mp3?v=<?=$ASSET_VERSION?>" preload="auto"></audio>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v=<?=$ASSET_VERSION?>"></script>
 </body>
 </html>
