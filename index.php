@@ -119,6 +119,34 @@ if(isset($_GET['ajax'])){
         $prev_cache = $cache; // snapshot to detect state transitions
         $out=[];
         $cache_changed=false;
+        // Prepare CPE ping batch: up to 10 random CPEs every 10 minutes, avoiding any pinged within the last hour
+        $batch_int = intdiv($now, 600); // 10-minute windows
+        $meta = $cache['_cpe_batch'] ?? [];
+        $selected_cpe_ids = $meta['ids'] ?? [];
+        if (($meta['last_batch_int'] ?? null) !== $batch_int) {
+            $candidates = [];
+            foreach ($devices as $dx) {
+                if (!is_gateway($dx)) {
+                    $cid = device_key($dx);
+                    $lip = $dx['ipAddress'] ?? null;
+                    if ($lip) {
+                        $lp = $cache[$cid]['last_cpe_ping_at'] ?? 0;
+                        if (($now - $lp) >= 3600) { // not pinged in last hour
+                            $candidates[] = $cid;
+                        }
+                    }
+                }
+            }
+            if (!empty($candidates)) {
+                shuffle($candidates);
+                $selected_cpe_ids = array_slice($candidates, 0, 10);
+            } else {
+                $selected_cpe_ids = [];
+            }
+            $cache['_cpe_batch'] = ['last_batch_int'=>$batch_int, 'ids'=>$selected_cpe_ids];
+            $cache_changed = true;
+        }
+        $cpe_ping_set = array_flip($selected_cpe_ids);
         foreach($devices as $d){
             $id=device_key($d);
             $name=$d['identification']['name']??$id;
@@ -133,6 +161,7 @@ if(isset($_GET['ajax'])){
                 ?? $d['overview']['uptime_sec']
                 ?? null;
             $lat=null;
+            $cpe_lat=null;
 
             if($isGw){
                 // Ping no more than once per minute per gateway
@@ -156,6 +185,16 @@ if(isset($_GET['ajax'])){
                     $stmt->bindValue(6,$lat,SQLITE3_FLOAT);
                     $stmt->bindValue(7,$on?1:0,SQLITE3_INTEGER);
                     @$stmt->execute();
+                }
+            } else {
+                // CPE: ping only if selected in this 10-minute window
+                if (isset($cpe_ping_set[$id])) {
+                    $cpe_lat = ping_host($d['ipAddress']??null);
+                    $cache[$id]['last_cpe_ping_at'] = $now;
+                    $cache[$id]['last_cpe_ping_ms'] = $cpe_lat;
+                    $cache_changed = true;
+                } else {
+                    $cpe_lat = $cache[$id]['last_cpe_ping_ms'] ?? null;
                 }
             }
 
@@ -198,6 +237,7 @@ if(isset($_GET['ajax'])){
             $out[]=[
                 'id'=>$id,'name'=>$name,'gateway'=>$isGw,
                 'online'=>$on,'cpu'=>$cpu,'ram'=>$ram,'temp'=>$temp,'latency'=>$lat,
+                'cpe_latency'=>$cpe_lat,
                 'uptime'=>$uptime,
                 'offline_since'=>$offline_since,
                 'simulate'=>$sim,'ack_until'=>$ack_until

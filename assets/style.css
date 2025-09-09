@@ -48,6 +48,7 @@ header {
   transition: transform 0.2s;
   position: relative; /* allow absolute-positioned badges */
 }
+.card h2 { text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
 .card:hover {
   transform: scale(1.02);
 }
@@ -166,6 +167,8 @@ footer {
 /* Ack timer at top-right of card */
 .ack-badge { position: absolute; top: 8px; right: 8px; display:flex; flex-direction:column; gap:4px; align-items:flex-end; z-index: 2; }
 .ack-badge .badge { font-size: 11px; padding: 2px 6px; }
+.cpe-badge { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.cpe-badge .badge { font-size: 11px; padding: 2px 6px; }
 
 /* Hide dropdown if card is already acked */
 .card.acked .dropdown { display: none !important; }

@@ -131,8 +131,15 @@ function fetchDevices(){
     });
   }catch(_){ }
 
-  // CPEs
-  const cpeHTML=cps.map(d=>`<div class="card ${d.online?'':'offline'}"><h2>${d.name}</h2><div style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div></div>`).join('');
+  // CPEs (show latency badge at top-right if recently pinged)
+  const cpeHTML=cps.map(d=>{
+    const latBadge = (typeof d.cpe_latency==='number') ? badgeLatency(d.cpe_latency) : '';
+    return `<div class="card ${d.online?'':'offline'}">
+      <div class="cpe-badge">${latBadge}</div>
+      <h2>${d.name}</h2>
+      <div style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
+    </div>`;
+  }).join('');
   document.getElementById('cpeGrid').innerHTML=cpeHTML;
 
   document.getElementById('footer').innerText=`HTTP ${j.http}, API latency ${j.api_latency} ms, Updated ${new Date().toLocaleTimeString()}`;
