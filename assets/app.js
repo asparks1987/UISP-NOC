@@ -98,7 +98,7 @@ function fetchDevices(){
       <div class="actions">
         ${!d.online ? `
           <div class="dropdown" style="${ackActive ? 'display:none' : ''}">
-            <button onclick="toggleAck</button>
+            <button onclick="toggleAckMenu('${d.id}')">Ack</button>
             <div id="ack-${d.id}" class="dropdown-content" style="display:none;background:#333;position:absolute;">
               <a href="#" onclick="ack('${d.id}','30m')">30m</a>
               <a href="#" onclick="ack('${d.id}','1h')">1h</a>
@@ -107,7 +107,7 @@ function fetchDevices(){
               <a href="#" onclick="ack('${d.id}','12h')">12h</a>
             </div>
           </div>
-          ${Ack</button>`:''}
+          ${ackActive ? `<button onclick="clearAck('${d.id}')">Clear Ack</button>`:''}
         `:``}
         
         <button onclick="showHistory('${d.id}','${d.name}')">History</button>
