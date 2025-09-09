@@ -281,12 +281,16 @@ if(isset($_GET['ajax'])){
         echo json_encode(['ok'=>1]); exit;
     }
     if($_GET['ajax']==='clearsim' && !empty($_GET['id'])){
-        $cache[$_GET['id']]['simulate']=false;
+        if(isset($cache[$_GET['id']]['simulate'])) unset($cache[$_GET['id']]['simulate']);
         file_put_contents($CACHE_FILE,json_encode($cache));
         echo json_encode(['ok'=>1]); exit;
     }
     if($_GET['ajax']==='clearall'){
-        foreach($cache as &$c) $c['ack_until']=null;
+        foreach($cache as $k=>&$c){
+            if(is_array($c)){
+                if(array_key_exists('ack_until',$c)) unset($c['ack_until']);
+            }
+        }
         file_put_contents($CACHE_FILE,json_encode($cache));
         echo json_encode(['ok'=>1]); exit;
     }

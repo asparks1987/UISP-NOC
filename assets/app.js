@@ -213,7 +213,14 @@ function fetchDevices(){
   sirenShouldAlertPrev = shouldAlert;
  });
 }
-function toggleAckMenu(id){const el=document.getElementById('ack-'+id);el.style.display=el.style.display==='none'?'block':'none';}
+function toggleAckMenu(id){
+  const el=document.getElementById('ack-'+id);
+  if(!el) return;
+  const showing = (el.style.display==='none' || !el.style.display);
+  el.style.display = showing ? 'block' : 'none';
+  const card = el.closest('.card');
+  if(card){ card.style.zIndex = showing ? '10000' : ''; }
+}
 function ack(id,dur){
   // Optimistic UI
   let dev=devicesCache.find(x=>x.id===id);

@@ -145,7 +145,7 @@ footer {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 9999;
+  z-index: 100000; /* ensure above neighboring cards */
   min-width: 220px;
   padding: 6px 0;
   background: #2a2a2a;
