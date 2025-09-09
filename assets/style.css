@@ -144,7 +144,7 @@ footer {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 1000;
+  z-index: 9999;
   min-width: 220px;
   padding: 6px 0;
   background: #2a2a2a;
@@ -166,6 +166,19 @@ footer {
 /* Ack timer at top-right of card */
 .ack-badge { position: absolute; top: 8px; right: 8px; }
 .ack-badge .badge { font-size: 12px; padding: 3px 8px; }
+
+/* Hide dropdown if card is already acked */
+.card.acked .dropdown { display: none !important; }
+
+/* Breathing glow for offline cards */
+@keyframes breathe-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,0,0,0.35), 0 0 2px rgba(255,0,0,0.2); }
+  50%      { box-shadow: 0 0 22px rgba(255,0,0,0.7), 0 0 8px rgba(255,0,0,0.45); }
+}
+.card.offline {
+  border: 1px solid #f55;
+  animation: breathe-glow 2.8s ease-in-out infinite;
+}
 
 /* Responsive spacing and typography tweaks */
 @media (max-width: 480px) {

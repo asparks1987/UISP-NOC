@@ -87,7 +87,7 @@ function fetchDevices(){
   const gwHTML=gws.map(d=>{
     const badges=[badgeVal(d.cpu,'CPU','%'),badgeVal(d.ram,'RAM','%'),badgeVal(d.temp,'Temp','°C'),badgeLatency(d.latency)].join(' ');
     const ackActive = d.ack_until && d.ack_until > (Date.now()/1000);
-    return `<div class="card ${d.online?'':'offline'}">
+    return `<div class="card ${d.online?'':'offline'} ${ackActive?'acked':''}">
       <div class="ack-badge">${badgeAck(d.ack_until)}</div>
       <h2>${d.name}</h2>
       <div class="status" style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
