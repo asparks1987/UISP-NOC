@@ -7,8 +7,15 @@ services:
     environment:
       - UISP_URL=https://changeme.unmsapp.com
       - UISP_TOKEN=YOUR_API_TOKEN_HERE
+      # Optional: Embedded Gotify defaults (change on first run)
+      - GOTIFY_DEFAULTUSER_NAME=admin
+      - GOTIFY_DEFAULTUSER_PASS=changeme
+      # If you create an application in Gotify, place token here for auto-send
+      # - GOTIFY_TOKEN=your_gotify_application_token
     ports:
-      - "12443:80"
+      - "1200:80"
+      # Expose Gotify UI/API (optional)
+      - "18080:18080"
     volumes:
       - noc_cache:/var/www/html/cache
     restart: unless-stopped

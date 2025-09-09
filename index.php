@@ -8,6 +8,17 @@ date_default_timezone_set('America/Chicago');
 $UISP_URL   = getenv("UISP_URL") ?: "https://changeme.unmsapp.com";
 $UISP_TOKEN = getenv("UISP_TOKEN") ?: "changeme";
 
+// Embedded Gotify (notifications)
+$GOTIFY_URL   = getenv('GOTIFY_URL') ?: 'http://127.0.0.1:18080';
+$GOTIFY_TOKEN = getenv('GOTIFY_TOKEN');
+if(!$GOTIFY_TOKEN){
+    $tokFile = __DIR__ . '/cache/gotify_app_token.txt';
+    if(is_file($tokFile)){
+        $t = trim(@file_get_contents($tokFile));
+        if($t !== '') $GOTIFY_TOKEN = $t;
+    }
+}
+
 $CACHE_DIR  = __DIR__ . "/cache";
 $CACHE_FILE = $CACHE_DIR . "/status_cache.json";
 $DB_FILE    = $CACHE_DIR . "/metrics.sqlite";
@@ -52,6 +63,29 @@ function is_gateway($d){ return strtolower($d['identification']['role']??'')==="
 function is_online($d){ $s=strtolower($d['overview']['status']??''); return in_array($s,['ok','online','active','connected','reachable','enabled']); }
 function ping_host($ip){ if(!$ip) return null; $ip=preg_replace('/\/\d+$/','',$ip); $out=@shell_exec("ping -c 1 -W 1 ".escapeshellarg($ip)." 2>&1"); if(preg_match('/time=([\d\.]+)\s*ms/',$out,$m)) return floatval($m[1]); return null; }
 
+function send_gotify($title,$message,$priority=5){
+    global $GOTIFY_URL,$GOTIFY_TOKEN;
+    if(!$GOTIFY_TOKEN) return false;
+    $url = rtrim($GOTIFY_URL,'/').'/message';
+    $payload = json_encode(['title'=>$title,'message'=>$message,'priority'=>$priority]);
+    $ch=curl_init();
+    curl_setopt_array($ch,[
+        CURLOPT_URL=>$url,
+        CURLOPT_POST=>true,
+        CURLOPT_POSTFIELDS=>$payload,
+        CURLOPT_HTTPHEADER=>[
+            'Content-Type: application/json',
+            'X-Gotify-Key: '.$GOTIFY_TOKEN
+        ],
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_TIMEOUT=>5
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return $code>=200 && $code<300;
+}
+
 // AJAX
 if(isset($_GET['ajax'])){
     header("Content-Type: application/json");
@@ -75,6 +109,7 @@ if(isset($_GET['ajax'])){
         $devices=json_decode($resp,true)?:[];
 
         $now=time();
+        $prev_cache = $cache; // snapshot to detect state transitions
         $out=[];
         $cache_changed=false;
         foreach($devices as $d){
@@ -115,9 +150,27 @@ if(isset($_GET['ajax'])){
             if(!$on){
                 if(empty($cache[$id]['offline_since'])){ $cache[$id]['offline_since']=$now; $cache_changed=true; }
                 $offline_since=$cache[$id]['offline_since'];
+                // Notify if gateway went offline and threshold passed and not yet notified
+                $prev_off = !empty($prev_cache[$id]['offline_since']);
+                $ack_until=$cache[$id]['ack_until']??null;
+                $ack_active = $ack_until && $ack_until>$now;
+                $threshold_met = ($now - ($cache[$id]['offline_since']??$now)) >= $FIRST_OFFLINE_THRESHOLD;
+                if($isGw && !$prev_off && $threshold_met && !$ack_active && empty($cache[$id]['gf_notified_offline'])){
+                    if(send_gotify('Gateway Offline', $name.' is OFFLINE', 8)){
+                        $cache[$id]['gf_notified_offline']=$now; $cache_changed=true;
+                    }
+                }
             } else {
                 if(!empty($cache[$id]['offline_since'])){ unset($cache[$id]['offline_since']); $cache_changed=true; }
                 $offline_since=null;
+                // If previously offline, send recovery notification
+                if(!empty($prev_cache[$id]['offline_since']) && $isGw){
+                    if(send_gotify('Gateway Online', $name.' is back ONLINE', 5)){
+                        unset($cache[$id]['gf_notified_offline']); $cache_changed=true;
+                    }
+                } else {
+                    if(isset($cache[$id]['gf_notified_offline'])){ unset($cache[$id]['gf_notified_offline']); $cache_changed=true; }
+                }
             }
 
             $ack_until=$cache[$id]['ack_until']??null;
