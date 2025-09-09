@@ -88,14 +88,17 @@ function fetchDevices(){
     const badges=[badgeVal(d.cpu,'CPU','%'),badgeVal(d.ram,'RAM','%'),badgeVal(d.temp,'Temp','°C'),badgeLatency(d.latency)].join(' ');
     const ackActive = d.ack_until && d.ack_until > (Date.now()/1000);
     return `<div class="card ${d.online?'':'offline'} ${ackActive?'acked':''}">
-      <div class="ack-badge">${badgeAck(d.ack_until)}</div>
+      <div class="ack-badge">${badgeAck(d.ack_until)}
+        <span class="badge good live-uptime" data-uptime="${d.uptime??''}"></span>
+        <span class="badge bad live-outage" data-offline-since="${d.offline_since??''}"></span>
+      </div>
       <h2>${d.name}</h2>
       <div class="status" style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div>
-      <div>${badges} ${badgeUptime(d.uptime)} ${badgeOutage(d.offline_since, d.online)}</div>
+      <div>${badges}</div>
       <div class="actions">
         ${!d.online ? `
           <div class="dropdown" style="${ackActive ? 'display:none' : ''}">
-            <button onclick="toggleAckMenu('${d.id}')">Ack ▾</button>
+            <button onclick="toggleAck</button>
             <div id="ack-${d.id}" class="dropdown-content" style="display:none;background:#333;position:absolute;">
               <a href="#" onclick="ack('${d.id}','30m')">30m</a>
               <a href="#" onclick="ack('${d.id}','1h')">1h</a>
@@ -104,7 +107,7 @@ function fetchDevices(){
               <a href="#" onclick="ack('${d.id}','12h')">12h</a>
             </div>
           </div>
-          ${ackActive ? `<button onclick="clearAck('${d.id}')">Clear Ack</button>`:''}
+          ${Ack</button>`:''}
         `:``}
         
         <button onclick="showHistory('${d.id}','${d.name}')">History</button>
@@ -260,4 +263,40 @@ window.addEventListener('click',unlockAudio,{once:true});
   }
   window.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeModal(); });
 })();
+
+// Live counters (update once per second)
+function fmtDurationFull(sec){
+  if(typeof sec!=="number" || !isFinite(sec) || sec<0) return null;
+  let s=Math.floor(sec);
+  const d=Math.floor(s/86400); s%=86400;
+  const h=Math.floor(s/3600); s%=3600;
+  const m=Math.floor(s/60);   s%=60;
+  const parts=[];
+  if(d) parts.push(d+"d"); if(h||d) parts.push(h+"h"); if(m||h||d) parts.push(m+"m"); parts.push(s+"s");
+  return parts.join(" ");
+}
+function tickLiveCounters(){
+  const nowSec=Math.floor(Date.now()/1000);
+  document.querySelectorAll('.card .live-uptime').forEach(el=>{
+    const u = parseInt(el.getAttribute('data-uptime'),10);
+    if(!isNaN(u) && u>0){
+      const t = fmtDurationFull(u + (nowSec % 1000000));
+      if(t) el.textContent = 'Uptime: ' + t;
+      el.style.display='';
+    } else { el.style.display='none'; }
+  });
+  document.querySelectorAll('.card .live-outage').forEach(el=>{
+    const s = parseInt(el.getAttribute('data-offline-since'),10);
+    if(!isNaN(s) && s>0){
+      const dur = nowSec - s;
+      const t = fmtDurationFull(dur);
+      if(t) el.textContent = 'Outage: ' + t;
+      el.style.display='';
+    } else { el.style.display='none'; }
+  });
+}
+setInterval(tickLiveCounters, 1000);
+
+
+
 
