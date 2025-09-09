@@ -125,7 +125,71 @@ volumes:
   noc_cache:
 ```
 
-Building Multi‑Arch Images
+Deployment: Copy/Paste Stacks
+
+Using prebuilt image (Docker Hub — development branch)
+```yaml
+version: '3.8'
+
+services:
+  uisp-noc:
+    image: youruser/uisp-noc:latest  # WARNING: tracks dev on Docker Hub
+    container_name: uisp-noc
+    environment:
+      UISP_URL: https://changeme.unmsapp.com
+      UISP_TOKEN: YOUR_API_TOKEN_HERE
+      # Embedded Gotify defaults (change on first run)
+      GOTIFY_DEFAULTUSER_NAME: admin
+      GOTIFY_DEFAULTUSER_PASS: changeme
+      # App -> Gotify auth (use one of these)
+      # GOTIFY_TOKEN: your_gotify_application_token
+      # GOTIFY_URL: http://127.0.0.1:18080  # set only if using external Gotify
+    ports:
+      - "12443:80"        # UISP NOC UI
+      # - "18080:18080"   # (optional) expose embedded Gotify UI/API
+    volumes:
+      - noc_cache:/var/www/html/cache
+    restart: unless-stopped
+
+volumes:
+  noc_cache:
+```
+
+Build from source (recommended for stable from GitHub main)
+```yaml
+version: '3.8'
+
+services:
+  uisp-noc:
+    build: .
+    container_name: uisp-noc
+    environment:
+      UISP_URL: https://changeme.unmsapp.com
+      UISP_TOKEN: YOUR_API_TOKEN_HERE
+      # Embedded Gotify defaults (change on first run)
+      GOTIFY_DEFAULTUSER_NAME: admin
+      GOTIFY_DEFAULTUSER_PASS: changeme
+      # App -> Gotify auth (use one of these)
+      # GOTIFY_TOKEN: your_gotify_application_token
+      # GOTIFY_URL: http://127.0.0.1:18080  # set only if using external Gotify
+    ports:
+      - "12443:80"        # UISP NOC UI
+      # - "18080:18080"   # (optional) expose embedded Gotify UI/API
+    volumes:
+      - noc_cache:/var/www/html/cache
+    restart: unless-stopped
+
+volumes:
+  noc_cache:
+```
+
+Portainer tips
+- Edit Stack → update environment variables (`UISP_URL`, `UISP_TOKEN`, Gotify vars) and ports.
+- If using the Docker Hub image, force pull the latest before Deploy.
+- If building from GitHub main, update the reference/commit and Deploy.
+- To configure Gotify: temporarily expose `18080:18080`, create an Application, copy its token, set `GOTIFY_TOKEN`, then you can remove `18080` if you don’t need external access.
+
+Building Multi-Arch Images
 - Use the helper script to build for ARM + x86 and push to Docker Hub.
 
 ```bash
@@ -163,4 +227,3 @@ Roadmap (High Level)
 
 License
 - MIT — free to use, modify, and share.
-

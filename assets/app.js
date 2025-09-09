@@ -112,6 +112,21 @@ function fetchDevices(){
     </div>`;
   }).join('');
   document.getElementById('gateGrid').innerHTML=gwHTML;
+  // Ensure simulate buttons are visible for testing
+  try{
+    const cards = Array.from(document.querySelectorAll('#gateGrid .card'));
+    gws.forEach((d, i)=>{
+      const card = cards[i];
+      if(!card) return;
+      const actions = card.querySelector('.actions');
+      if(!actions) return;
+      if(!actions.querySelector('.btn-sim')){
+        const b1=document.createElement('button'); b1.className='btn-sim'; b1.textContent='Simulate Outage'; b1.title='Simulate outage for testing'; b1.onclick=()=>simulate(d.id);
+        const b2=document.createElement('button'); b2.className='btn-sim-clear'; b2.textContent='Clear Sim'; b2.title='Clear simulated outage'; b2.onclick=()=>clearSim(d.id);
+        actions.appendChild(b1); actions.appendChild(b2);
+      }
+    });
+  }catch(_){ }
 
   // CPEs
   const cpeHTML=cps.map(d=>`<div class="card ${d.online?'':'offline'}"><h2>${d.name}</h2><div style="color:${d.online?'#b06cff':'#f55'}">${d.online?'ONLINE':'OFFLINE'}</div></div>`).join('');

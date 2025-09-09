@@ -65,7 +65,10 @@ function ping_host($ip){ if(!$ip) return null; $ip=preg_replace('/\/\d+$/','',$i
 
 function send_gotify($title,$message,$priority=5){
     global $GOTIFY_URL,$GOTIFY_TOKEN;
-    if(!$GOTIFY_TOKEN) return false;
+    if(!$GOTIFY_TOKEN){
+        @file_put_contents(__DIR__.'/cache/gotify_log.txt', date('c')." missing GOTIFY_TOKEN\n", FILE_APPEND);
+        return false;
+    }
     $url = rtrim($GOTIFY_URL,'/').'/message';
     $payload = json_encode(['title'=>$title,'message'=>$message,'priority'=>$priority]);
     $ch=curl_init();
@@ -81,8 +84,12 @@ function send_gotify($title,$message,$priority=5){
         CURLOPT_TIMEOUT=>5
     ]);
     $resp = curl_exec($ch);
+    $err  = curl_error($ch);
     $code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
     curl_close($ch);
+    if(!($code>=200 && $code<300)){
+        @file_put_contents(__DIR__.'/cache/gotify_log.txt', date('c')." code=$code err=".($err?:'-')." resp=".$resp."\n", FILE_APPEND);
+    }
     return $code>=200 && $code<300;
 }
 
@@ -128,7 +135,17 @@ if(isset($_GET['ajax'])){
             $lat=null;
 
             if($isGw){
-                $lat=ping_host($d['ipAddress']??null);
+                // Ping no more than once per minute per gateway
+                $lastPingAt = $cache[$id]['last_ping_at'] ?? 0;
+                $cachedLat  = $cache[$id]['last_ping_ms'] ?? null;
+                if(($now - $lastPingAt) >= 60 || $cachedLat===null){
+                    $lat=ping_host($d['ipAddress']??null);
+                    $cache[$id]['last_ping_at']=$now;
+                    $cache[$id]['last_ping_ms']=$lat;
+                    $cache_changed=true;
+                } else {
+                    $lat=$cachedLat;
+                }
                 if($now%60===0){
                     $stmt=$db->prepare("INSERT INTO metrics (device_id,name,cpu,ram,temp,latency,online) VALUES (?,?,?,?,?,?,?)");
                     $stmt->bindValue(1,$id,SQLITE3_TEXT);
@@ -150,14 +167,16 @@ if(isset($_GET['ajax'])){
             if(!$on){
                 if(empty($cache[$id]['offline_since'])){ $cache[$id]['offline_since']=$now; $cache_changed=true; }
                 $offline_since=$cache[$id]['offline_since'];
-                // Notify if gateway went offline and threshold passed and not yet notified
-                $prev_off = !empty($prev_cache[$id]['offline_since']);
-                $ack_until=$cache[$id]['ack_until']??null;
-                $ack_active = $ack_until && $ack_until>$now;
+                // Notify when gateway is offline: first after threshold, then every 10 minutes while still offline
                 $threshold_met = ($now - ($cache[$id]['offline_since']??$now)) >= $FIRST_OFFLINE_THRESHOLD;
-                if($isGw && !$prev_off && $threshold_met && !$ack_active && empty($cache[$id]['gf_notified_offline'])){
+                $last_sent = $cache[$id]['gf_last_offline_notif'] ?? null;
+                $should_repeat = ($last_sent && ($now - $last_sent) >= 600);
+                if($isGw && $threshold_met && (!$last_sent || $should_repeat)){
+                    @file_put_contents($CACHE_DIR.'/gotify_log.txt', date('c')." offline eval: id=$id name=$name threshold_met=$threshold_met last_sent=".($last_sent?:'null')." repeat=$should_repeat\n", FILE_APPEND);
                     if(send_gotify('Gateway Offline', $name.' is OFFLINE', 8)){
-                        $cache[$id]['gf_notified_offline']=$now; $cache_changed=true;
+                        $cache[$id]['gf_last_offline_notif']=$now; $cache_changed=true;
+                    } else {
+                        @file_put_contents($CACHE_DIR.'/gotify_log.txt', date('c')." offline send_gotify returned false for id=$id name=$name\n", FILE_APPEND);
                     }
                 }
             } else {
@@ -165,11 +184,12 @@ if(isset($_GET['ajax'])){
                 $offline_since=null;
                 // If previously offline, send recovery notification
                 if(!empty($prev_cache[$id]['offline_since']) && $isGw){
+                    @file_put_contents($CACHE_DIR.'/gotify_log.txt', date('c')." online eval: id=$id name=$name\n", FILE_APPEND);
                     if(send_gotify('Gateway Online', $name.' is back ONLINE', 5)){
-                        unset($cache[$id]['gf_notified_offline']); $cache_changed=true;
+                        unset($cache[$id]['gf_last_offline_notif']); $cache_changed=true;
                     }
                 } else {
-                    if(isset($cache[$id]['gf_notified_offline'])){ unset($cache[$id]['gf_notified_offline']); $cache_changed=true; }
+                    if(isset($cache[$id]['gf_last_offline_notif'])){ unset($cache[$id]['gf_last_offline_notif']); $cache_changed=true; }
                 }
             }
 
@@ -196,6 +216,11 @@ if(isset($_GET['ajax'])){
         $rows=[];
         while($r=$res->fetchArray(SQLITE3_ASSOC)) $rows[]=$r;
         echo json_encode(array_reverse($rows)); exit;
+    }
+
+    if($_GET['ajax']==='gotifytest'){
+        $ok = send_gotify('Test from UISP NOC','This is a test notification.', 5);
+        echo json_encode(['ok'=>$ok?1:0]); exit;
     }
 
     if($_GET['ajax']==='ack' && !empty($_GET['id']) && !empty($_GET['dur'])){
