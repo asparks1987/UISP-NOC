@@ -115,21 +115,6 @@ function fetchDevices(){
     </div>`;
   }).join('');
   document.getElementById('gateGrid').innerHTML=gwHTML;
-  // Ensure simulate buttons are visible for testing
-  try{
-    const cards = Array.from(document.querySelectorAll('#gateGrid .card'));
-    gws.forEach((d, i)=>{
-      const card = cards[i];
-      if(!card) return;
-      const actions = card.querySelector('.actions');
-      if(!actions) return;
-      if(!actions.querySelector('.btn-sim')){
-        const b1=document.createElement('button'); b1.className='btn-sim'; b1.textContent='Simulate Outage'; b1.title='Simulate outage for testing'; b1.onclick=()=>simulate(d.id);
-        const b2=document.createElement('button'); b2.className='btn-sim-clear'; b2.textContent='Clear Sim'; b2.title='Clear simulated outage'; b2.onclick=()=>clearSim(d.id);
-        actions.appendChild(b1); actions.appendChild(b2);
-      }
-    });
-  }catch(_){ }
 
   // CPEs (show latency badge at top-right if recently pinged)
   const cpeHTML=cps.map(d=>{
@@ -163,7 +148,14 @@ function fetchDevices(){
   const cpuClass = highCpu>0 ? 'bad' : 'good';
   const ramClass = highRam>0 ? 'bad' : 'good';
 
+  const gwOnline = gws.filter(d=>d.online).length;
+  const gwTotal = gws.length;
+  const cpeOnline = cps.filter(d=>d.online).length;
+  const cpeTotal = cps.length;
+
   const summaryHTML = [
+    `<span class="badge good">Gateways: ${gwOnline}/${gwTotal}</span>`,
+    `<span class="badge good">CPEs: ${cpeOnline}/${cpeTotal}</span>`,
     `<span class="badge ${healthClass}">Health: ${health==null?'--':health+'%'}</span>`,
     `<span class="badge ${offlineClass}">GW Offline: ${offlineGw}</span>`,
     `<span class="badge ${unackedClass}">Unacked: ${unacked}</span>`,
@@ -225,26 +217,26 @@ function ack(id,dur){
   // Optimistic UI
   let dev=devicesCache.find(x=>x.id===id);
   if(dev){dev.ack_until=Date.now()/1000+1800;}
-  fetch(`?ajax=ack&id=${id}&dur=${dur}`).then(fetchDevices);
+  fetch(`?ajax=ack&id=${id}&dur=${dur}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function clearAck(id){
   let dev=devicesCache.find(x=>x.id===id);
   if(dev){dev.ack_until=null;}
-  fetch(`?ajax=clear&id=${id}`).then(fetchDevices);
+  fetch(`?ajax=clear&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function simulate(id){
   // Try to unlock audio on explicit user action
   unlockAudio();
   let dev=devicesCache.find(x=>x.id===id);
   if(dev){dev.simulate=true;}
-  fetch(`?ajax=simulate&id=${id}`).then(fetchDevices);
+  fetch(`?ajax=simulate&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function clearSim(id){
   let dev=devicesCache.find(x=>x.id===id);
   if(dev){dev.simulate=false;}
-  fetch(`?ajax=clearsim&id=${id}`).then(fetchDevices);
+  fetch(`?ajax=clearsim&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
-function clearAll(){fetch(`?ajax=clearall`).then(fetchDevices);}
+function clearAll(){ fetch(`?ajax=clearall&t=${Date.now()}`).then(()=>fetchDevices()); }
 function closeModal(){document.getElementById('historyModal').style.display='none';}
 function showHistory(id,name){
  fetch(`?ajax=history&id=${id}`).then(r=>r.json()).then(rows=>{

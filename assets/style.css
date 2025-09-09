@@ -165,9 +165,9 @@ footer {
 .dropdown-content a:active { background: #444; }
 
 /* Ack timer at top-right of card */
-.ack-badge { position: absolute; top: 8px; right: 8px; display:flex; flex-direction:column; gap:4px; align-items:flex-end; z-index: 2; }
+.ack-badge { position: absolute; top: 8px; right: 8px; display:flex; flex-direction:column; gap:4px; align-items:flex-end; z-index: 2; pointer-events: none; }
 .ack-badge .badge { font-size: 11px; padding: 2px 6px; }
-.cpe-badge { position: absolute; top: 8px; right: 8px; z-index: 2; }
+.cpe-badge { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; }
 .cpe-badge .badge { font-size: 11px; padding: 2px 6px; }
 
 /* Hide dropdown if card is already acked */

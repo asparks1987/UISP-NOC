@@ -281,7 +281,11 @@ if(isset($_GET['ajax'])){
         echo json_encode(['ok'=>1]); exit;
     }
     if($_GET['ajax']==='clearsim' && !empty($_GET['id'])){
-        if(isset($cache[$_GET['id']]['simulate'])) unset($cache[$_GET['id']]['simulate']);
+        $did = $_GET['id'];
+        if(isset($cache[$did]['simulate'])) unset($cache[$did]['simulate']);
+        // Proactively clear any outage state created by simulation so UI snaps back immediately
+        if(isset($cache[$did]['offline_since'])) unset($cache[$did]['offline_since']);
+        if(isset($cache[$did]['gf_last_offline_notif'])) unset($cache[$did]['gf_last_offline_notif']);
         file_put_contents($CACHE_FILE,json_encode($cache));
         echo json_encode(['ok'=>1]); exit;
     }
