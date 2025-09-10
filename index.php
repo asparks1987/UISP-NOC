@@ -25,15 +25,33 @@ $DB_FILE    = $CACHE_DIR . "/metrics.sqlite";
 
 $FIRST_OFFLINE_THRESHOLD = 30;
 
-// Ensure cache dir
-if (!is_dir($CACHE_DIR)) mkdir($CACHE_DIR, 0775, true);
+// Ensure cache dir and basic permissions
+if (!is_dir($CACHE_DIR)) @mkdir($CACHE_DIR, 0775, true);
+if (!is_writable($CACHE_DIR)) @chmod($CACHE_DIR, 0775);
 
 // Load cache
 $cache = file_exists($CACHE_FILE) ? json_decode(file_get_contents($CACHE_FILE), true) : [];
 if (!is_array($cache)) $cache = [];
 
-// SQLite init
-$db = new SQLite3($DB_FILE);
+// SQLite init with robust error handling
+try {
+    if (!file_exists($DB_FILE)) {
+        // Best-effort create the file so SQLite has a handle
+        @touch($DB_FILE);
+        @chmod($DB_FILE, 0664);
+    }
+    $db = new SQLite3($DB_FILE);
+} catch (Exception $e) {
+    http_response_code(500);
+    header('Content-Type: text/plain');
+    echo "Fatal: Unable to open SQLite database at: $DB_FILE\n";
+    echo "Error: ".$e->getMessage()."\n\n";
+    echo "Checks:\n";
+    echo "- Ensure directory exists and is writable: $CACHE_DIR\n";
+    echo "- If using a Docker volume, fix permissions (chown/chmod) for www-data.\n";
+    echo "- Example inside container: chown -R www-data:www-data /var/www/html/cache && chmod -R u+rwX,g+rwX /var/www/html/cache\n";
+    exit;
+}
 $db->exec('PRAGMA journal_mode = wal;');
 $db->busyTimeout(5000);
 $db->exec("CREATE TABLE IF NOT EXISTS metrics (
