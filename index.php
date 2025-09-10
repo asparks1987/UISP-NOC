@@ -119,8 +119,8 @@ if(isset($_GET['ajax'])){
         $prev_cache = $cache; // snapshot to detect state transitions
         $out=[];
         $cache_changed=false;
-        // Prepare CPE ping batch: up to 10 random CPEs every 10 minutes, avoiding any pinged within the last hour
-        $batch_int = intdiv($now, 600); // 10-minute windows
+        // Prepare CPE ping batch: up to 10 random CPEs every 3 minutes, avoiding any pinged within the last hour
+        $batch_int = intdiv($now, 180); // 3-minute windows
         $meta = $cache['_cpe_batch'] ?? [];
         $selected_cpe_ids = $meta['ids'] ?? [];
         if (($meta['last_batch_int'] ?? null) !== $batch_int) {
@@ -187,7 +187,7 @@ if(isset($_GET['ajax'])){
                     @$stmt->execute();
                 }
             } else {
-                // CPE: ping only if selected in this 10-minute window
+                // CPE: ping only if selected in this 3-minute window
                 if (isset($cpe_ping_set[$id])) {
                     $cpe_lat = ping_host($d['ipAddress']??null);
                     $cache[$id]['last_cpe_ping_at'] = $now;

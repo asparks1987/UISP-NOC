@@ -1,229 +1,245 @@
-# UISP NOC Dashboard
+<div align="center">
 
-Important — Please Read First!
-- The Docker Hub image for this project currently tracks an active development branch and may be unstable or change without notice.
-- For stable, working versions, use the main branch from the GitHub repository and build locally.
+# UISP NOC
 
----
+Monitoring that feels crisp, clear, and loud when it matters.
 
-Overview
-- A self‑hosted Network Operations Center (NOC) dashboard for monitoring Ubiquiti UISP devices (gateways + CPEs).
-- Runs as a Dockerized PHP + Apache app with SQLite logging, live alerts, a siren for outages, and an embedded Gotify server for push notifications.
+🖥️ Gateways • 📡 CPEs • 🔔 Live Alerts • 📈 History • 📬 Push Notifications
 
-Key Features
-- Live polling of UISP API with 10s refresh.
-- Online/offline indicators; flashing offline cards for gateways.
-- Gateway device metrics: latency, CPU, RAM, temperature, uptime (where available).
-- Acknowledgements to temporarily silence sound alerts.
-- Siren (buz.mp3) for unacknowledged offline gateways (first at 30s, then every 10 minutes while still unacked).
-- Historical metrics (SQLite) with quick history charts (Chart.js) for CPU/RAM/Temp/Latency.
-- Embedded Gotify server for push notifications (offline/online transitions) — no separate server required.
-- Multi‑arch support (ARMv7/ARM64/x86_64) via build script.
+</div>
 
 ---
 
-Container Details
-- Base image: `php:8.2-apache`
-- PHP extensions: `pdo`, `pdo_sqlite`
-- System packages: `libsqlite3-dev`, `iputils-ping`, `curl`, `ca-certificates`
-- Web server: Apache (foreground)
-- Embedded services: Gotify server (background) via `start.sh`
-- Working dir: `/var/www/html`
-- App entrypoint: `start.sh` (starts Gotify, then Apache)
-- Exposed ports:
-  - `80`: UISP NOC web UI
-  - `18080`: Gotify UI/API (embedded)
+Table of Contents
 
-File/Directory Layout (container)
-- `/var/www/html/index.php`: main PHP application
-- `/var/www/html/assets/`: CSS/JS assets
-- `/var/www/html/buz.mp3`: alert siren
-- `/var/www/html/cache/`: persistent cache + database volume
-  - `status_cache.json`: app state cache for acks/simulations
-  - `metrics.sqlite`: historical metrics DB (created on demand)
-  - `gotify/`: embedded Gotify data
-    - `data.db`: Gotify SQLite database
-  - `gotify_app_token.txt`: optional place to store your Gotify application token
-- `/etc/gotify/config.yml`: Gotify server configuration
-
-Start Script
-- `start.sh` ensures `/var/www/html/cache/gotify/` exists, starts Gotify (logging to `/var/log/gotify.log`) and then launches Apache in the foreground.
+- What Is This?
+- Feature Highlights
+- How It Works
+- Quick Start
+- Configuration
+- Data & Persistence
+- Security Notes
+- Operations & Troubleshooting
+- Customization
+- Development
+- FAQ
+- License
 
 ---
 
-Ports
-- App UI: map host port to container `80` (default compose maps to `12443:80`).
-- Embedded Gotify: map host port to container `18080` if you want to access the Gotify UI/API externally.
+What Is This?
 
-Volumes
-- The compose file defines a single named volume for persistence:
-  - `noc_cache:/var/www/html/cache`
-- This volume stores all app cache, SQLite databases (metrics + gotify), and the optional `gotify_app_token.txt`.
+UISP NOC is a self‑hosted, lightweight Network Operations Center (NOC) dashboard for Ubiquiti UISP environments. It runs as a single Dockerized PHP + Apache app, tracks live device status, plays a siren for critical outages, stores short‑term metrics in SQLite, and pushes notifications via an embedded Gotify server.
 
-Environment Variables
-- Required
-  - `UISP_URL`: Base URL of your UISP instance (e.g., `https://your-uisp.unmsapp.com`).
-  - `UISP_TOKEN`: UISP API token.
-- Embedded Gotify (defaults)
-  - `GOTIFY_DEFAULTUSER_NAME`: Default Gotify admin username (e.g., `admin`).
-  - `GOTIFY_DEFAULTUSER_PASS`: Default Gotify admin password (e.g., `changeme`).
-- App → Gotify integration
-  - `GOTIFY_TOKEN`: Gotify Application Token. If not set, the app will try to read `/var/www/html/cache/gotify_app_token.txt`.
-  - `GOTIFY_URL`: Optional override (default: `http://127.0.0.1:18080`). Use this if you point to an external Gotify server.
+Perfect for a wallboard, a small NOC, or a home lab where you want a zero‑hassle view of gateways and CPEs.
 
-Notifications (Embedded Gotify)
-- The container includes a Gotify server listening on `0.0.0.0:18080` with data persisted under `/var/www/html/cache/gotify`.
-- On first run, log into Gotify using the default user/pass from the environment variables.
-- Create an Application in Gotify (e.g., “UISP NOC”) and copy the generated token.
-- Provide the token to the app via either:
-  1) `GOTIFY_TOKEN` environment variable, or
-  2) Saving the token to `/var/www/html/cache/gotify_app_token.txt` (or `./cache/gotify_app_token.txt` on the host when using the compose volume).
-- What gets notified:
-  - Gateway OFFLINE: sent once when the device first goes offline and stays offline for ~30 seconds.
-  - Gateway ONLINE: sent once on recovery.
-- Acknowledgements suppress repeating siren alarms in the UI but do not retroactively stop already-sent push notifications.
-- To use an external Gotify server, set `GOTIFY_URL` to your server and provide `GOTIFY_TOKEN`.
+---
 
-Quick Start (Docker Compose)
-1) Clone the repo and edit the compose file if needed.
+Feature Highlights
+
+- Live UISP Polling: Queries UISP every ~10s for device status and metrics.
+- Gateways + CPEs: Two tabs with quick device cards and at‑a‑glance health.
+- Offline‑First Sorting (CPE): CPE list surfaces offline devices first, then A–Z.
+- Siren Alerts: Plays a buzzer for unacknowledged offline gateways.
+  - First alert ~30s after initial offline, then periodic repeats.
+  - One‑click Acknowledge (30m, 1h, 6h, 8h, 12h) to temporarily silence.
+- Push Notifications: Embedded Gotify server for OFFLINE/ONLINE events.
+- History: SQLite time‑series for gateway CPU/RAM/Temp/Latency with charts.
+- Ping Scheduling (CPE): Pings up to 10 CPEs every 3 minutes, ensuring any one CPE is not pinged more than once per hour.
+- Simple Deploy: Single container, self‑contained cache and DB.
+
+---
+
+How It Works
+
+- Architecture
+  - Runtime: PHP 8.2 on Apache (containerized)
+  - Storage: SQLite database in `cache/metrics.sqlite`
+  - Push: Embedded Gotify server listening on port `18080`
+  - Assets: Plain JS (Chart.js) and CSS in `assets/`
+
+- Polling & Metrics
+  - Every ~10s the app calls the UISP API for device state and basic metrics.
+  - Gateways are pinged at most once per minute and metrics are recorded.
+  - CPE pinging is batched: up to 10 devices every 3 minutes, chosen randomly from CPEs that have not been pinged within the last hour.
+
+- Alerts & Acknowledgements
+  - Gateways changing to OFFLINE trigger a siren after a short threshold.
+  - Repeats occur while the gateway remains offline and unacknowledged.
+  - Acknowledging a device temporarily suppresses siren repeats.
+
+- UI Notes
+  - Gateways: Status, CPU, RAM, Temp, Latency, Uptime, ACK controls.
+  - CPEs: Offline‑first sorting; recent CPE latency shown where available.
+  - History modal: CPU/RAM/Temp/Latency charts per device (gateways).
+
+---
+
+Quick Start
+
+Using Docker Compose (build from source – recommended)
+
+```yaml
+version: '3.8'
+
+services:
+  uisp-noc:
+    build: .
+    container_name: uisp-noc
+    environment:
+      UISP_URL: https://changeme.unmsapp.com
+      UISP_TOKEN: YOUR_API_TOKEN_HERE
+      GOTIFY_DEFAULTUSER_NAME: admin
+      GOTIFY_DEFAULTUSER_PASS: changeme
+      # Optional if you prefer to pass the app token directly
+      # GOTIFY_TOKEN: your_gotify_application_token
+      # GOTIFY_URL: http://127.0.0.1:18080  # use if targeting an external Gotify
+    ports:
+      - "12443:80"        # UISP NOC UI
+      # - "18080:18080"   # (optional) expose embedded Gotify UI/API
+    volumes:
+      - noc_cache:/var/www/html/cache
+    restart: unless-stopped
+
+volumes:
+  noc_cache:
+```
+
+Steps
+
+1) Clone and start
 
 ```bash
 git clone https://github.com/asparks1987/UISP-NOC.git
 cd UISP-NOC
-docker compose up --build -d
+docker compose up -d
 ```
 
-App URLs
-- UISP NOC: `http://<host-ip>:12443`
-- Gotify (optional): `http://<host-ip>:18080`
+2) Open the UI at `http://<host-ip>:12443/`
 
-docker-compose.yml (reference)
-```yaml
-version: '3.8'
+3) Configure Gotify (embedded)
 
-services:
-  uisp-noc:
-    build: .
-    container_name: uisp-noc
-    environment:
-      - UISP_URL=https://changeme.unmsapp.com
-      - UISP_TOKEN=YOUR_API_TOKEN_HERE
-      # Embedded Gotify defaults (change on first run)
-      - GOTIFY_DEFAULTUSER_NAME=admin
-      - GOTIFY_DEFAULTUSER_PASS=changeme
-      # Optional: provide your Gotify application token here
-      # - GOTIFY_TOKEN=your_gotify_application_token
-    ports:
-      - "12443:80"
-      # Expose Gotify UI/API (optional)
-      - "18080:18080"
-    volumes:
-      - noc_cache:/var/www/html/cache
-    restart: unless-stopped
+- Option A – UI login: Temporarily expose `18080:18080`, visit `http://<host-ip>:18080`, sign in with the defaults, create an Application, copy its token, and set `GOTIFY_TOKEN` in your compose file (or save it to `cache/gotify_app_token.txt`).
+- Option B – Token file only: Place the application token in `cache/gotify_app_token.txt`. The app auto‑detects it on boot.
 
-volumes:
-  noc_cache:
-```
+---
 
-Deployment: Copy/Paste Stacks
+Configuration
 
-Using prebuilt image (Docker Hub — development branch)
-```yaml
-version: '3.8'
+Environment Variables (app)
 
-services:
-  uisp-noc:
-    image: youruser/uisp-noc:latest  # WARNING: tracks dev on Docker Hub
-    container_name: uisp-noc
-    environment:
-      UISP_URL: https://changeme.unmsapp.com
-      UISP_TOKEN: YOUR_API_TOKEN_HERE
-      # Embedded Gotify defaults (change on first run)
-      GOTIFY_DEFAULTUSER_NAME: admin
-      GOTIFY_DEFAULTUSER_PASS: changeme
-      # App -> Gotify auth (use one of these)
-      # GOTIFY_TOKEN: your_gotify_application_token
-      # GOTIFY_URL: http://127.0.0.1:18080  # set only if using external Gotify
-    ports:
-      - "12443:80"        # UISP NOC UI
-      # - "18080:18080"   # (optional) expose embedded Gotify UI/API
-    volumes:
-      - noc_cache:/var/www/html/cache
-    restart: unless-stopped
+- `UISP_URL` (required): Base URL of your UISP (e.g., `https://your-uisp.unmsapp.com`).
+- `UISP_TOKEN` (required): UISP API token.
+- `GOTIFY_TOKEN` (optional): Gotify Application token used by the app to send notifications.
+- `GOTIFY_URL` (optional): Gotify endpoint. Defaults to the embedded server `http://127.0.0.1:18080`.
 
-volumes:
-  noc_cache:
-```
+Environment Variables (embedded Gotify)
 
-Build from source (recommended for stable from GitHub main)
-```yaml
-version: '3.8'
+- `GOTIFY_DEFAULTUSER_NAME`: Initial Gotify admin username.
+- `GOTIFY_DEFAULTUSER_PASS`: Initial Gotify admin password.
 
-services:
-  uisp-noc:
-    build: .
-    container_name: uisp-noc
-    environment:
-      UISP_URL: https://changeme.unmsapp.com
-      UISP_TOKEN: YOUR_API_TOKEN_HERE
-      # Embedded Gotify defaults (change on first run)
-      GOTIFY_DEFAULTUSER_NAME: admin
-      GOTIFY_DEFAULTUSER_PASS: changeme
-      # App -> Gotify auth (use one of these)
-      # GOTIFY_TOKEN: your_gotify_application_token
-      # GOTIFY_URL: http://127.0.0.1:18080  # set only if using external Gotify
-    ports:
-      - "12443:80"        # UISP NOC UI
-      # - "18080:18080"   # (optional) expose embedded Gotify UI/API
-    volumes:
-      - noc_cache:/var/www/html/cache
-    restart: unless-stopped
+Ports
 
-volumes:
-  noc_cache:
-```
+- `80` (container): UISP NOC web UI (map to any host port, default in examples is `12443`).
+- `18080` (container): Embedded Gotify UI/API; expose only if you need external access.
 
-Portainer tips
-- Edit Stack → update environment variables (`UISP_URL`, `UISP_TOKEN`, Gotify vars) and ports.
-- If using the Docker Hub image, force pull the latest before Deploy.
-- If building from GitHub main, update the reference/commit and Deploy.
-- To configure Gotify: temporarily expose `18080:18080`, create an Application, copy its token, set `GOTIFY_TOKEN`, then you can remove `18080` if you don’t need external access.
+Volumes
 
-Building Multi-Arch Images
-- Use the helper script to build for ARM + x86 and push to Docker Hub.
+- `noc_cache:/var/www/html/cache` – single persistent volume holding:
+  - `status_cache.json` (app state: ACKs, simulation flags, ping metadata)
+  - `metrics.sqlite` (gateway history)
+  - `gotify/` (embedded server data)
+  - `gotify_app_token.txt` (optional place to store the app token)
 
-```bash
-./build-multiarch.sh youruser/uisp-noc:latest
-```
+---
 
-Then deploy with:
+Data & Persistence
 
-```yaml
-image: youruser/uisp-noc:latest
-```
+- Metrics Retention: Data is appended to `metrics.sqlite`. Size depends on device count and polling. Back up as needed.
+- Cache Behavior: `status_cache.json` tracks last‑seen state (ACKs, offline since, ping times) and is updated frequently.
+- Removal: Removing the volume clears history, ACKs, and Gotify data.
 
-Notes on Stability
-- Docker Hub image: tracks development; expect frequent changes and potential breakage.
-- GitHub main branch: recommended source for building stable images locally.
-- For production, pin to a known-good tag or commit, and run behind a reverse proxy with HTTPS.
+---
 
-Security & Operations
-- Pass the UISP API token via environment variables, secrets, or your orchestrator’s secret management (do not hardcode).
-- Change the default Gotify admin credentials promptly.
-- Recommended: run behind a reverse proxy (Traefik, Nginx) with TLS.
-- Persistent data is stored in the `noc_cache` volume; back it up periodically if you rely on historical metrics or Gotify data.
+Security Notes
 
-Troubleshooting
-- No notifications? Ensure you created a Gotify Application and configured `GOTIFY_TOKEN` (or saved the token file). Check `http://<host-ip>:18080` and verify login.
-- No sound? Browsers often require a user gesture. Click “Enable Sound” in the app header once per session.
-- High latency or missing metrics? Verify the container can reach device IPs; `iputils-ping` is available in the image; latency uses ICMP from inside the container.
-- API failures? Confirm `UISP_URL` and `UISP_TOKEN` are correct and reachable from the container.
+- Treat `UISP_TOKEN` like a secret. Prefer orchestrator secrets or environment injection; avoid committing tokens.
+- Change Gotify defaults immediately, or use an external Gotify service.
+- Run behind HTTPS (reverse proxy: Nginx, Traefik, Caddy) for production.
 
-Roadmap (High Level)
-- Role‑based access (basic auth / login screen)
-- Customizable thresholds for alerts
-- Export historical data (CSV/JSON)
-- Optional Grafana integration for long‑term trending
+---
+
+Operations & Troubleshooting
+
+- No notifications
+  - Verify an Application exists in Gotify and the app has a valid token.
+  - Check `GOTIFY_URL` if using an external server.
+
+- No sound
+  - Browsers often block autoplay; click the “Enable Sound” button once per session.
+
+- High latency / missing pings
+  - The container performs ICMP; ensure it can reach device IPs and that `iputils-ping` is present (it is in the image).
+
+- API failures
+  - Confirm `UISP_URL`/`UISP_TOKEN` and network reachability from the container.
+
+- History charts empty
+  - History persists for gateways based on the per‑minute ping cadence; give it a few minutes.
+
+---
+
+Customization
+
+- CPE Sorting
+  - Default: offline‑first, then A–Z. Implemented client‑side in `assets/app.js`.
+
+- CPE Ping Rate
+  - Default: up to 10 CPEs every 3 minutes, with a per‑CPE minimum of 1 hour between pings.
+  - Located in `index.php` around the “CPE ping batch” section.
+  - To change the window or batch size, adjust the `intdiv($now, 180)` granularity and the `array_slice(..., 0, 10)` limit accordingly.
+
+- Siren Threshold & Repeat
+  - Threshold for first alert is defined in `index.php` (`$FIRST_OFFLINE_THRESHOLD`).
+  - Repeat cadence is managed in the frontend logic (`assets/app.js`).
+
+---
+
+Development
+
+- Stack
+  - PHP 8.2 + Apache, SQLite (PDO), basic cURL
+  - Frontend: Vanilla JS + Chart.js
+
+- Layout
+  - `index.php` – backend + HTML template + API proxy
+  - `assets/` – JS, CSS
+  - `cache/` – runtime state and databases (created on first run)
+  - `start.sh` – launches embedded Gotify then Apache
+
+- Scripts
+  - `build-multiarch.sh` – helper for building and pushing images for multiple architectures.
+
+- Tips
+  - Keep the `cache/` directory writable.
+  - When iterating on styles or JS, file mtimes are used for cache‑busting via `?v=` query params.
+
+---
+
+FAQ
+
+- Does this replace UISP?
+  - No. It visualizes and alerts using UISP data; UISP remains the source of truth.
+
+- Can I use an external Gotify?
+  - Yes. Set `GOTIFY_URL` and provide a valid `GOTIFY_TOKEN`. You can disable port `18080` if not needed.
+
+- Can I change the ping cadence?
+  - Yes, edit `index.php` where the CPE batch is created and the gateway per‑minute logic is enforced. See Customization above.
+
+---
 
 License
-- MIT — free to use, modify, and share.
+
+MIT – free to use, modify, and share.
+

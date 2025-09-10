@@ -81,7 +81,10 @@ function fetchDevices(){
  fetch('?ajax=devices').then(r=>r.json()).then(j=>{
   devicesCache=j.devices;
   const gws=j.devices.filter(d=>d.gateway).sort((a,b)=>a.online-b.online||a.name.localeCompare(b.name));
-  const cps=j.devices.filter(d=>!d.gateway).sort((a,b)=>a.name.localeCompare(b.name));
+  // Sort CPEs: offline first, then by name
+  const cps=j.devices
+    .filter(d=>!d.gateway)
+    .sort((a,b)=> (a.online - b.online) || a.name.localeCompare(b.name));
 
   // Gateways
   const gwHTML=gws.map(d=>{
