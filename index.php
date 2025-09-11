@@ -1,6 +1,7 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+session_start();
 
 date_default_timezone_set('America/Chicago');
 
@@ -22,12 +23,68 @@ if(!$GOTIFY_TOKEN){
 $CACHE_DIR  = __DIR__ . "/cache";
 $CACHE_FILE = $CACHE_DIR . "/status_cache.json";
 $DB_FILE    = $CACHE_DIR . "/metrics.sqlite";
+$AUTH_FILE  = $CACHE_DIR . "/auth.json";
 
 $FIRST_OFFLINE_THRESHOLD = 30;
 
 // Ensure cache dir and basic permissions
 if (!is_dir($CACHE_DIR)) @mkdir($CACHE_DIR, 0775, true);
 if (!is_writable($CACHE_DIR)) @chmod($CACHE_DIR, 0775);
+
+// Simple Sign-On: bootstrap default admin/admin on first run
+function load_auth($file){
+    if(is_file($file)){
+        $j = json_decode(@file_get_contents($file), true);
+        if(is_array($j) && isset($j['username']) && isset($j['password_hash'])) return $j;
+    }
+    $default = [
+        'username' => 'admin',
+        'password_hash' => password_hash('admin', PASSWORD_DEFAULT),
+        'updated_at' => date('c')
+    ];
+    @file_put_contents($file, json_encode($default));
+    return $default;
+}
+function save_auth($file, $username, $password){
+    $data = [
+        'username' => $username,
+        'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+        'updated_at' => date('c')
+    ];
+    @file_put_contents($file, json_encode($data));
+    return $data;
+}
+$AUTH = load_auth($AUTH_FILE);
+
+// Handle login/logout actions early
+if(isset($_GET['action']) && $_GET['action']==='login' && $_SERVER['REQUEST_METHOD']==='POST'){
+    $u = trim($_POST['username'] ?? '');
+    $p = $_POST['password'] ?? '';
+    if($u === ($AUTH['username'] ?? '') && password_verify($p, $AUTH['password_hash'] ?? '')){
+        $_SESSION['auth_ok'] = 1;
+        header('Location: ./');
+        exit;
+    } else {
+        $_SESSION['auth_err'] = 'Invalid credentials';
+        header('Location: ./?login=1');
+        exit;
+    }
+}
+if(isset($_GET['action']) && $_GET['action']==='logout'){
+    session_destroy();
+    header('Location: ./?login=1');
+    exit;
+}
+
+// For AJAX endpoints, require login except for a health or login check
+function require_login_for_ajax(){
+    if(!isset($_SESSION['auth_ok'])){
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode(['error'=>'unauthorized']);
+        exit;
+    }
+}
 
 // Load cache
 $cache = file_exists($CACHE_FILE) ? json_decode(file_get_contents($CACHE_FILE), true) : [];
@@ -113,6 +170,7 @@ function send_gotify($title,$message,$priority=5){
 
 // AJAX
 if(isset($_GET['ajax'])){
+    require_login_for_ajax();
     header("Content-Type: application/json");
     // Prevent caching of AJAX responses
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -281,6 +339,20 @@ if(isset($_GET['ajax'])){
         echo json_encode(['ok'=>$ok?1:0]); exit;
     }
 
+    if($_GET['ajax']==='changepw' && $_SERVER['REQUEST_METHOD']==='POST'){
+        $cur = $_POST['current'] ?? '';
+        $new = $_POST['new'] ?? '';
+        $user = $_POST['username'] ?? ($AUTH['username'] ?? 'admin');
+        if(!password_verify($cur, $AUTH['password_hash'] ?? '')){
+            echo json_encode(['ok'=>0,'error'=>'current_password_incorrect']); exit;
+        }
+        if(strlen($new) < 6){
+            echo json_encode(['ok'=>0,'error'=>'new_password_too_short']); exit;
+        }
+        $AUTH = save_auth($AUTH_FILE, $user, $new);
+        echo json_encode(['ok'=>1]); exit;
+    }
+
     if($_GET['ajax']==='ack' && !empty($_GET['id']) && !empty($_GET['dur'])){
         $id=$_GET['id']; $dur=$_GET['dur'];
         $durmap=['30m'=>1800,'1h'=>3600,'6h'=>21600,'8h'=>28800,'12h'=>43200];
@@ -324,6 +396,42 @@ if(!isset($_GET['ajax'])){
     header('Pragma: no-cache');
 }
 ?>
+<?php if(!isset($_SESSION['auth_ok'])): ?>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>UISP NOC - Login</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    .login{background:#1b1b1b;padding:24px;border-radius:8px;box-shadow:0 0 0 1px #333;width:320px}
+    .login h2{margin:0 0 12px 0;font-weight:600}
+    .field{margin:10px 0}
+    .field label{display:block;margin-bottom:6px;color:#ccc;font-size:12px}
+    .field input{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#0f0f0f;color:#eee}
+    .btn{width:100%;padding:10px;margin-top:10px;background:#6c5ce7;border:none;border-radius:6px;color:#fff;font-weight:600;cursor:pointer}
+    .hint{color:#aaa;font-size:12px;margin-top:8px}
+    .err{color:#f55;margin-bottom:8px;font-size:13px}
+  </style>
+</head>
+<body>
+  <form class="login" method="post" action="?action=login">
+    <h2>Sign in</h2>
+    <?php if(!empty($_SESSION['auth_err'])){ echo '<div class="err">'.htmlspecialchars($_SESSION['auth_err']).'</div>'; unset($_SESSION['auth_err']); } ?>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" name="username" value="admin" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit">Login</button>
+    <div class="hint">Default: admin / admin. You can change it after login.</div>
+  </form>
+</body>
+</html>
+<?php exit; endif; ?>
 <!doctype html>
 <html>
 <head>
@@ -337,6 +445,8 @@ if(!isset($_GET['ajax'])){
   <span id="overallSummary"></span>
   <button id="enableSoundBtn" class="btn-accent" onclick="enableSound()" style="float:right;margin-right:10px;">Enable Sound</button>
   <button onclick="clearAll()" style="float:right;margin-right:10px;">Clear All Acks</button>
+  <button onclick="changePassword()" style="float:right;margin-right:10px;">Change Password</button>
+  <button onclick="logout()" style="float:right;margin-right:10px;">Logout</button>
 </header>
 <div class="tabs">
   <button class="tablink active" onclick="openTab('gateways')">Gateways</button>

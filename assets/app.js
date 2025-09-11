@@ -78,7 +78,7 @@ function enableSound(){
 }
 
 function fetchDevices(){
- fetch('?ajax=devices').then(r=>r.json()).then(j=>{
+ fetch('?ajax=devices').then(r=>{ if(r.status===401){ location.reload(); throw new Error('unauthorized'); } return r.json(); }).then(j=>{
   devicesCache=j.devices;
   const gws=j.devices.filter(d=>d.gateway).sort((a,b)=>a.online-b.online||a.name.localeCompare(b.name));
   // Sort CPEs: offline first, then by name
@@ -305,6 +305,26 @@ function tickLiveCounters(){
   });
 }
 setInterval(tickLiveCounters, 1000);
+
+// Account helpers
+function changePassword(){
+  const current = prompt('Enter current password');
+  if(current===null) return;
+  const next = prompt('Enter new password (min 6 chars)');
+  if(next===null) return;
+  const fd = new FormData();
+  fd.append('current', current);
+  fd.append('new', next);
+  fetch('?ajax=changepw', {method:'POST', body: fd}).then(async r=>{
+    if(r.status===401){ location.reload(); return; }
+    const j = await r.json().catch(()=>({ok:0,error:'bad_json'}));
+    if(j.ok){ alert('Password updated. You will be logged out.'); logout(); }
+    else { alert('Failed to update password: '+(j.error||'unknown')); }
+  }).catch(()=>{});
+}
+function logout(){
+  window.location.href='?action=logout';
+}
 
 
 
