@@ -1,6 +1,8 @@
 {
     # Optional: send an email to ACME CA for cert events
     email {env.ACME_EMAIL}
+    # Enable admin API on container network so the app can request certs
+    admin 0.0.0.0:2019
 }
 
 # Main site with automatic HTTPS. Default to localhost if NOC_DOMAIN not set.

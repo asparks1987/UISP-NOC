@@ -26,6 +26,12 @@ Access
 - UISP NOC: `https://<NOC_DOMAIN>/` (app login required)
 - Gotify (optional): `https://<GOTIFY_DOMAIN>/` (no app login; consider leaving this internal)
 
+UI Certificate Provisioning
+- Open the app and login → click "TLS/Certs".
+- Enter Domain and ACME email (and optional Gotify domain), then Provision.
+- This uses Caddy's admin API to load a live config and begin ACME issuance.
+- Option: Use Let's Encrypt Staging for dry runs to avoid rate limits.
+
 Notes
 - Without public DNS: set `NOC_DOMAIN=localhost`. Caddy uses local certs (you may need to trust Caddy's local CA).
 - If you prefer not to expose Gotify publicly, don't set `GOTIFY_DOMAIN`.

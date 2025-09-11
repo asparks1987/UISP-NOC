@@ -339,6 +339,85 @@ if(isset($_GET['ajax'])){
         echo json_encode(['ok'=>$ok?1:0]); exit;
     }
 
+    // --- Caddy TLS helpers ---
+    if($_GET['ajax']==='caddy_cfg'){
+        $ch=curl_init();
+        curl_setopt_array($ch,[
+            CURLOPT_URL=>'http://caddy:2019/config/',
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_TIMEOUT=>4
+        ]);
+        $resp=curl_exec($ch);
+        $err=curl_error($ch);
+        $code=curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if($code>=200 && $code<300){ echo $resp; } else { echo json_encode(['error'=>'caddy_unreachable','code'=>$code,'err'=>$err]); }
+        exit;
+    }
+
+    if($_GET['ajax']==='provision_tls' && $_SERVER['REQUEST_METHOD']==='POST'){
+        $domain = trim($_POST['domain'] ?? '');
+        $gdomain = trim($_POST['gotify_domain'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $staging = !empty($_POST['staging']);
+        if($domain===''){ echo json_encode(['ok'=>0,'error'=>'missing_domain']); exit; }
+        if($email===''){ echo json_encode(['ok'=>0,'error'=>'missing_email']); exit; }
+        $issuers = [['module'=>'acme','email'=>$email]];
+        if($staging){ $issuers[0]['ca']='https://acme-staging-v02.api.letsencrypt.org/directory'; }
+
+        $routes=[];
+        $routes[] = [
+            'match'=>[['host'=>[$domain]]],
+            'handle'=>[[
+                'handler'=>'reverse_proxy',
+                'upstreams'=>[['dial'=>'uisp-noc:80']]
+            ]]
+        ];
+        if($gdomain!==''){
+            $routes[] = [
+                'match'=>[['host'=>[$gdomain]]],
+                'handle'=>[[
+                    'handler'=>'reverse_proxy',
+                    'upstreams'=>[['dial'=>'uisp-noc:18080']]
+                ]]
+            ];
+        }
+        $cfg = [
+            'apps'=>[
+                'tls'=>[
+                    'automation'=>[
+                        'policies'=>[[ 'issuers'=>$issuers ]]
+                    ]
+                ],
+                'http'=>[
+                    'servers'=>[
+                        'srv0'=>[
+                            'listen'=>[':80',':443'],
+                            'routes'=>$routes
+                        ]
+                    ]
+                ]
+            ]
+        ];
+        $payload=json_encode($cfg);
+        $ch=curl_init();
+        curl_setopt_array($ch,[
+            CURLOPT_URL=>'http://caddy:2019/load',
+            CURLOPT_POST=>true,
+            CURLOPT_POSTFIELDS=>$payload,
+            CURLOPT_HTTPHEADER=>['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_TIMEOUT=>10
+        ]);
+        $resp=curl_exec($ch);
+        $err=curl_error($ch);
+        $code=curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if($code>=200 && $code<300){ echo json_encode(['ok'=>1,'message'=>'caddy_config_loaded']); }
+        else { echo json_encode(['ok'=>0,'error'=>'caddy_load_failed','code'=>$code,'err'=>$err,'resp'=>$resp]); }
+        exit;
+    }
+
     if($_GET['ajax']==='changepw' && $_SERVER['REQUEST_METHOD']==='POST'){
         $cur = $_POST['current'] ?? '';
         $new = $_POST['new'] ?? '';
@@ -447,6 +526,7 @@ if(!isset($_GET['ajax'])){
   <button onclick="clearAll()" style="float:right;margin-right:10px;">Clear All Acks</button>
   <button onclick="changePassword()" style="float:right;margin-right:10px;">Change Password</button>
   <button onclick="logout()" style="float:right;margin-right:10px;">Logout</button>
+  <button onclick="openTLS()" style="float:right;margin-right:10px;">TLS/Certs</button>
 </header>
 <div class="tabs">
   <button class="tablink active" onclick="openTab('gateways')">Gateways</button>
@@ -467,6 +547,28 @@ if(!isset($_GET['ajax'])){
     <button onclick="closeModal()">Close</button>
   </div>
 </div>
+
+<div id="tlsModal" class="modal">
+  <div class="modal-content">
+    <h3>TLS / Certificates</h3>
+    <button class="modal-close" onclick="closeTLS()" aria-label="Close">&times;</button>
+    <p>Provision HTTPS certificates via Caddy. Ensure your DNS points to this host and ports 80/443 are reachable from the internet.</p>
+    <form id="tlsForm" onsubmit="return submitTLS();" style="display:block;max-width:560px">
+      <label>Site Domain (UI)</label>
+      <input id="tlsDomain" type="text" placeholder="noc.example.com" style="width:100%;padding:8px;border-radius:6px;border:1px solid #444;background:#111;color:#eee" required>
+      <div style="height:8px"></div>
+      <label>Gotify Domain (optional)</label>
+      <input id="tlsGotify" type="text" placeholder="gotify.example.com" style="width:100%;padding:8px;border-radius:6px;border:1px solid #444;background:#111;color:#eee">
+      <div style="height:8px"></div>
+      <label>ACME Email</label>
+      <input id="tlsEmail" type="email" placeholder="admin@example.com" style="width:100%;padding:8px;border-radius:6px;border:1px solid #444;background:#111;color:#eee" required>
+      <div><label><input id="tlsStaging" type="checkbox"> Use Let’s Encrypt Staging (testing)</label></div>
+      <div style="height:10px"></div>
+      <button class="btn-accent" type="submit">Provision / Reload Caddy</button>
+    </form>
+    <pre id="tlsStatus" style="background:#111;border:1px solid #333;border-radius:8px;padding:10px;color:#8ad;overflow:auto;max-height:260px"></pre>
+  </div>
+ </div>
 
 <audio id="siren" src="buz.mp3?v=<?=$ASSET_VERSION?>" preload="auto"></audio>
 

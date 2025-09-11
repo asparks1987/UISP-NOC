@@ -241,6 +241,29 @@ function clearSim(id){
 }
 function clearAll(){ fetch(`?ajax=clearall&t=${Date.now()}`).then(()=>fetchDevices()); }
 function closeModal(){document.getElementById('historyModal').style.display='none';}
+function openTLS(){
+  const m=document.getElementById('tlsModal'); if(!m)return; m.style.display='block';
+  const s=document.getElementById('tlsStatus'); if(s){ s.textContent='Fetching current Caddy config...'; }
+  fetch('?ajax=caddy_cfg').then(async r=>{
+    if(r.status===401){ location.reload(); return; }
+    const txt = await r.text();
+    if(s){ s.textContent = txt; }
+  }).catch(()=>{ if(s) s.textContent='Unable to reach Caddy admin API. Ensure the Caddy container is running.'; });
+}
+function closeTLS(){ const m=document.getElementById('tlsModal'); if(m) m.style.display='none'; }
+function submitTLS(){
+  const domain=document.getElementById('tlsDomain').value.trim();
+  const gotify=document.getElementById('tlsGotify').value.trim();
+  const email=document.getElementById('tlsEmail').value.trim();
+  const staging=document.getElementById('tlsStaging').checked;
+  const s=document.getElementById('tlsStatus'); if(s) s.textContent='Sending config to Caddy...';
+  const fd=new FormData(); fd.append('domain',domain); fd.append('gotify_domain',gotify); fd.append('email',email); if(staging) fd.append('staging','1');
+  fetch('?ajax=provision_tls',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{
+    if(j.ok){ if(s) s.textContent='Caddy loaded config. Visit https://'+domain+'/ in a minute to verify certs.'; }
+    else{ if(s) s.textContent='Failed: '+(j.error||'unknown')+' code='+(j.code||'')+' err='+(j.err||'')+' resp='+(j.resp||''); }
+  }).catch(()=>{ if(s) s.textContent='Request failed.'; });
+  return false;
+}
 function showHistory(id,name){
  fetch(`?ajax=history&id=${id}`).then(r=>r.json()).then(rows=>{
    document.getElementById('histTitle').innerText=`History for ${name}`;
