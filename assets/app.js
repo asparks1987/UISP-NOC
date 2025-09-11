@@ -4,6 +4,8 @@ function openTab(id){
   document.getElementById(id).style.display='block';
   event.target.classList.add('active');
 }
+// Create a DOM-safe id (best-effort; avoids quotes/spaces that break attributes)
+function safeDomId(id){ return String(id||'').replace(/[^A-Za-z0-9_-]/g,'_'); }
 function badgeVal(v,label,suf){if(v==null)return'';let cls='good';if(v>90)cls='bad';else if(v>75)cls='warn';return `<span class="badge ${cls}">${label}: ${v}${suf}</span>`;}
 function badgeLatency(v){if(v==null)return'';let cls='good';if(v>500)cls='bad';else if(v>100)cls='warn';return `<span class="badge ${cls}">Latency: ${v} ms</span>`;}
 
@@ -101,13 +103,13 @@ function fetchDevices(){
       <div class="actions">
         ${!d.online ? `
           <div class="dropdown" style="${ackActive ? 'display:none' : ''}">
-            <button onclick="toggleAckMenu('${d.id}')">Ack</button>
-            <div id="ack-${d.id}" class="dropdown-content" style="display:none;background:#333;position:absolute;">
-              <a href="#" onclick="ack('${d.id}','30m')">30m</a>
-              <a href="#" onclick="ack('${d.id}','1h')">1h</a>
-              <a href="#" onclick="ack('${d.id}','6h')">6h</a>
-              <a href="#" onclick="ack('${d.id}','8h')">8h</a>
-              <a href="#" onclick="ack('${d.id}','12h')">12h</a>
+            <button onclick="toggleAckMenu('${safeDomId(d.id)}')">Ack</button>
+            <div id="ack-${safeDomId(d.id)}" class="dropdown-content" style="display:none;background:#333;position:absolute;">
+              <a href="#" onclick="ack('${encodeURIComponent(d.id)}','30m','${safeDomId(d.id)}');return false;">30m</a>
+              <a href="#" onclick="ack('${encodeURIComponent(d.id)}','1h','${safeDomId(d.id)}');return false;">1h</a>
+              <a href="#" onclick="ack('${encodeURIComponent(d.id)}','6h','${safeDomId(d.id)}');return false;">6h</a>
+              <a href="#" onclick="ack('${encodeURIComponent(d.id)}','8h','${safeDomId(d.id)}');return false;">8h</a>
+              <a href="#" onclick="ack('${encodeURIComponent(d.id)}','12h','${safeDomId(d.id)}');return false;">12h</a>
             </div>
           </div>
           ${ackActive ? `<button onclick="clearAck('${d.id}')">Clear Ack</button>`:''}
@@ -208,34 +210,45 @@ function fetchDevices(){
   sirenShouldAlertPrev = shouldAlert;
  });
 }
-function toggleAckMenu(id){
-  const el=document.getElementById('ack-'+id);
+function toggleAckMenu(safeId){
+  const el=document.getElementById('ack-'+safeId);
   if(!el) return;
   const showing = (el.style.display==='none' || !el.style.display);
   el.style.display = showing ? 'block' : 'none';
   const card = el.closest('.card');
   if(card){ card.style.zIndex = showing ? '10000' : ''; }
 }
-function ack(id,dur){
+function ack(id,dur,safeId){
   // Optimistic UI
-  let dev=devicesCache.find(x=>x.id===id);
-  if(dev){dev.ack_until=Date.now()/1000+1800;}
+  const rid = decodeURIComponent(id);
+  let dev=devicesCache.find(x=>x.id===rid);
+  if(dev){
+    const map={ '30m':1800, '1h':3600, '6h':21600, '8h':28800, '12h':43200 };
+    const add = map[dur] || 1800;
+    dev.ack_until = Math.floor(Date.now()/1000) + add;
+  }
+  // Hide menu immediately
+  const el = document.getElementById('ack-'+safeId);
+  if(el){ el.style.display='none'; const card = el.closest('.card'); if(card){ card.style.zIndex=''; } }
   fetch(`?ajax=ack&id=${id}&dur=${dur}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function clearAck(id){
-  let dev=devicesCache.find(x=>x.id===id);
+  const rid = decodeURIComponent(id);
+  let dev=devicesCache.find(x=>x.id===rid);
   if(dev){dev.ack_until=null;}
   fetch(`?ajax=clear&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function simulate(id){
   // Try to unlock audio on explicit user action
   unlockAudio();
-  let dev=devicesCache.find(x=>x.id===id);
+  const rid = decodeURIComponent(id);
+  let dev=devicesCache.find(x=>x.id===rid);
   if(dev){dev.simulate=true;}
   fetch(`?ajax=simulate&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
 function clearSim(id){
-  let dev=devicesCache.find(x=>x.id===id);
+  const rid = decodeURIComponent(id);
+  let dev=devicesCache.find(x=>x.id===rid);
   if(dev){dev.simulate=false;}
   fetch(`?ajax=clearsim&id=${id}&t=${Date.now()}`).then(()=>fetchDevices());
 }
