@@ -8,6 +8,8 @@ date_default_timezone_set('America/Chicago');
 // Config
 $UISP_URL   = getenv("UISP_URL") ?: "https://changeme.unmsapp.com";
 $UISP_TOKEN = getenv("UISP_TOKEN") ?: "changeme";
+// Feature flags / UI toggles
+$SHOW_TLS_UI = in_array(strtolower((string)getenv('SHOW_TLS_UI')), ['1','true','yes'], true);
 
 // Embedded Gotify (notifications)
 $GOTIFY_URL   = getenv('GOTIFY_URL') ?: 'http://127.0.0.1:18080';
@@ -526,7 +528,9 @@ if(!isset($_GET['ajax'])){
   <button onclick="clearAll()" style="float:right;margin-right:10px;">Clear All Acks</button>
   <button onclick="changePassword()" style="float:right;margin-right:10px;">Change Password</button>
   <button onclick="logout()" style="float:right;margin-right:10px;">Logout</button>
-  <button onclick="openTLS()" style="float:right;margin-right:10px;">TLS/Certs</button>
+  <?php if($SHOW_TLS_UI): ?>
+    <button onclick="openTLS()" style="float:right;margin-right:10px;">TLS/Certs</button>
+  <?php endif; ?>
 </header>
 <div class="tabs">
   <button class="tablink active" onclick="openTab('gateways')">Gateways</button>
