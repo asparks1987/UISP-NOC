@@ -1,0 +1,57 @@
+version: "3.9"
+
+volumes:
+  mysql_data:
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: homeai
+      MYSQL_USER: homeai
+      MYSQL_PASSWORD: homeai
+      MYSQL_ROOT_PASSWORD: rootpw
+    command:
+      - --mysql-native-password=ON
+      - --skip-log-bin
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3307:3306" # change if taken
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+  home-ai:
+    build: .
+    image: predheadtx/home-ai:all-in-one
+    environment:
+      # App → DB
+      MYSQL_HOST: mysql
+      MYSQL_DB: homeai
+      MYSQL_USER: homeai
+      MYSQL_PASSWORD: homeai
+
+      # PHP → Python (in the same container)
+      PYTHON_API_BASE_URL: http://127.0.0.1:8000
+
+      # Python → Home Assistant
+      HA_BASE_URL: http://host.docker.internal:8123
+      HA_WS_URL: ws://host.docker.internal:8123/api/websocket
+      # Prefer .env for secrets; example only:
+      # HA_TOKEN: your_home_assistant_token
+      HA_AUTO_START: "true"
+      HA_TEMP_ENTITY_ID: sensor.outdoor_temperature
+
+      # Optional: override if your Python app entrypoint differs
+      # PYTHON_START_CMD: python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # ensures host.docker.internal works on Linux
+
+    ports:
+      - "8080:80"    # PHP/Apache
+      # - "8000:8000"  # Python API (optional if you want external access)
+
+    depends_on:
+      - mysql
+    restart: unless-stopped
